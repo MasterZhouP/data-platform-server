@@ -163,6 +163,13 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <!-- 集成平台模块 -->
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>bl-integration</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
@@ -180,6 +187,7 @@
         <module>bl-quartz</module>
         <module>bl-generator</module>
         <module>bl-common</module>
+        <module>bl-integration</module>
     </modules>
     <packaging>pom</packaging>
 

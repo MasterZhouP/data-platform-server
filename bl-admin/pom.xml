@@ -42,6 +42,12 @@
             <artifactId>bl-framework</artifactId>
         </dependency>
 
+        <!-- 集成平台模块 -->
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>bl-integration</artifactId>
+        </dependency>
+
         <!-- 定时任务-->
         <dependency>
             <groupId>com.ruoyi</groupId>

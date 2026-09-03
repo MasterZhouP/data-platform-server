@@ -1,0 +1,62 @@
+{
+  "date": "2026-09-03",
+  "timezone": "Asia/Shanghai",
+  "scope": "Stage 0 module structure and build acceptance; no OA/U8 implementation",
+  "backend": {
+    "command": "mvn -B clean package",
+    "started": "2026-09-03T15:47:12.388163+08:00",
+    "finished": "2026-09-03T15:47:27.5867453+08:00",
+    "exitCode": 0
+  },
+  "backendReactorSuccessCount": 8,
+  "backendNoTestsToRunCount": 7,
+  "backendTestSkipFlagsUsed": false,
+  "java": "Eclipse Temurin 17.0.19",
+  "maven": "3.6.3",
+  "frontend": {
+    "command": "npm run build:prod",
+    "node": "v24.20.0",
+    "npm": "11.19.0",
+    "nodePath": "C:\\Users\\74994\\AppData\\Local\\nvm\\v24.20.0\\node.exe",
+    "started": "2026-09-03T15:48:03.5558163+08:00",
+    "finished": "2026-09-03T15:48:26.1334567+08:00",
+    "exitCode": 0
+  },
+  "frontendWorktreeUnchanged": true,
+  "structure": {
+    "checkedAt": "2026-09-03T15:49:29.9137438+08:00",
+    "moduleRegisteredOnce": true,
+    "adminDependsOnIntegration": true,
+    "integrationDirectDependencies": [
+      "bl-common"
+    ],
+    "baseModuleReverseDependencies": [],
+    "sourceFiles": 9,
+    "sourceKind": "package-info.java only",
+    "compiledClasses": 9,
+    "integrationJarSHA256": "A98683A3510C81B8868E674248B74DC882259FAF57DF683AE5C1AA62C88CC7D4",
+    "embeddedJarSHA256": "A98683A3510C81B8868E674248B74DC882259FAF57DF683AE5C1AA62C88CC7D4",
+    "embeddedJarMatches": true,
+    "frontendIndexExists": true,
+    "pluginDirectoryExists": false
+  },
+  "protectedSourceFiles": 14,
+  "protectedSourceHashesUnchanged": true,
+  "baseline": {
+    "path": "D:\\Person_knowlegebase\\my-llm-wiki\\01-项目\\data-platform-数据交换平台\\00-项目总方案与开发基线.md",
+    "version": "1.1",
+    "beforeSHA256": "0D2D333DDA1E7E8770B60CE26D8627BC2D0EB665F3BB99A9825BF97954058797",
+    "afterSHA256": "41FB3E14773D633378A90FCA4C4E5CFB5249DE5CB0BFBABF23D19D064CC9A4D6",
+    "originalAppendixUnchanged": true,
+    "taskRows": 58,
+    "appendixSHA256": "DA310721B68A704A02BCCC29B131A063BAB39CDC0558AD2E1799D43D0E4077E2"
+  },
+  "notVerified": [
+    "application startup",
+    "database connectivity",
+    "OA/U8 API integration",
+    "A8 SDK/plugin deployment",
+    "business tests",
+    "production migration"
+  ]
+}
