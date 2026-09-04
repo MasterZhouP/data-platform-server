@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.execution.mapper.IntegrationExecutionMapper">
+
+    <resultMap id="ExecutionResult" type="com.ruoyi.integration.execution.domain.IntegrationExecution">
+        <id property="executionId" column="execution_id" />
+        <result property="taskCode" column="task_code" />
+        <result property="masterId" column="master_id" />
+        <result property="businessKey" column="business_key" />
+        <result property="formId" column="form_id" />
+        <result property="summaryId" column="summary_id" />
+        <result property="status" column="status" />
+        <result property="stage" column="stage" />
+        <result property="retryable" column="retryable" />
+        <result property="resultUnknown" column="result_unknown" />
+        <result property="retryCount" column="retry_count" />
+        <result property="retryOfExecutionId" column="retry_of_execution_id" />
+        <result property="dedupKey" column="dedup_key" />
+        <result property="triggerPayload" column="trigger_payload" />
+        <result property="requestPayload" column="request_payload" />
+        <result property="responsePayload" column="response_payload" />
+        <result property="errorCode" column="error_code" />
+        <result property="errorMessage" column="error_message" />
+        <result property="startTime" column="start_time" />
+        <result property="endTime" column="end_time" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <sql id="executionColumns">
+        execution_id, task_code, master_id, business_key, form_id, summary_id,
+        status, stage, retryable, result_unknown, retry_count, retry_of_execution_id,
+        dedup_key, trigger_payload, request_payload, response_payload, error_code,
+        error_message, start_time, end_time, create_time, update_time
+    </sql>
+
+    <sql id="executionListColumns">
+        execution_id, task_code, master_id, business_key, form_id, summary_id,
+        status, stage, retryable, result_unknown, retry_count, retry_of_execution_id,
+        error_code, error_message, start_time, end_time, create_time, update_time
+    </sql>
+
+    <insert id="insertExecution" parameterType="com.ruoyi.integration.execution.domain.IntegrationExecution"
+            useGeneratedKeys="true" keyProperty="executionId">
+        INSERT INTO int_execution (
+            task_code, master_id, business_key, form_id, summary_id, status, stage,
+            retryable, result_unknown, retry_count, retry_of_execution_id, dedup_key,
+            trigger_payload, request_payload, response_payload, error_code, error_message,
+            start_time, end_time, create_time, update_time
+        ) VALUES (
+            #{taskCode}, #{masterId}, #{businessKey}, #{formId}, #{summaryId}, #{status}, #{stage},
+            #{retryable}, #{resultUnknown}, #{retryCount}, #{retryOfExecutionId}, #{dedupKey},
+            #{triggerPayload}, #{requestPayload}, #{responsePayload}, #{errorCode}, #{errorMessage},
+            #{startTime}, #{endTime}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <select id="selectExecutionById" resultMap="ExecutionResult">
+        SELECT <include refid="executionColumns" />
+        FROM int_execution
+        WHERE execution_id = #{executionId}
+    </select>
+
+    <select id="selectExecutionByIdForUpdate" resultMap="ExecutionResult">
+        SELECT <include refid="executionColumns" />
+        FROM int_execution
+        WHERE execution_id = #{executionId}
+        FOR UPDATE
+    </select>
+
+    <select id="selectExecutionList" resultMap="ExecutionResult">
+        SELECT <include refid="executionListColumns" />
+        FROM int_execution
+        <where>
+            <if test="taskCode != null and taskCode != ''">AND task_code = #{taskCode}</if>
+            <if test="masterId != null and masterId != ''">AND master_id = #{masterId}</if>
+            <if test="businessKey != null and businessKey != ''">AND business_key = #{businessKey}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="params != null and params.beginTime != null and params.beginTime != ''">
+                AND create_time &gt;= #{params.beginTime}
+            </if>
+            <if test="params != null and params.endTime != null and params.endTime != ''">
+                AND create_time &lt;= #{params.endTime}
+            </if>
+        </where>
+        ORDER BY create_time DESC, execution_id DESC
+    </select>
+
+    <select id="countRetryChildren" resultType="int">
+        SELECT COUNT(1) FROM int_execution WHERE retry_of_execution_id = #{executionId}
+    </select>
+
+    <update id="claimPending">
+        UPDATE int_execution
+        SET status = 'RUNNING', start_time = #{startTime}, update_time = #{startTime}
+        WHERE execution_id = #{executionId} AND status = 'PENDING'
+    </update>
+
+    <select id="selectPendingIds" resultType="long">
+        SELECT execution_id
+        FROM int_execution
+        WHERE status = 'PENDING'
+        ORDER BY create_time ASC, execution_id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="updateCurrentStage">
+        UPDATE int_execution
+        SET stage = #{stage}, update_time = #{updateTime}
+        WHERE execution_id = #{executionId} AND status = 'RUNNING'
+    </update>
+
+    <update id="markSuccess">
+        UPDATE int_execution
+        SET status = 'SUCCESS', stage = 'COMPLETED', retryable = 0, result_unknown = 0,
+            business_key = COALESCE(business_key, #{businessKey}),
+            request_payload = #{requestPayload}, response_payload = #{responsePayload},
+            error_code = NULL, error_message = NULL, end_time = #{endTime}, update_time = #{endTime}
+        WHERE execution_id = #{executionId} AND status = 'RUNNING'
+    </update>
+
+    <update id="markFailed">
+        UPDATE int_execution
+        SET status = 'FAILED', retryable = #{retryable}, result_unknown = #{resultUnknown},
+            error_code = #{errorCode}, error_message = #{errorMessage}, end_time = #{endTime},
+            update_time = #{endTime}
+            <if test="retryable and !resultUnknown">, dedup_key = NULL</if>
+        WHERE execution_id = #{executionId} AND status = 'RUNNING'
+    </update>
+
+    <update id="failStaleRunning">
+        UPDATE int_execution
+        SET status = 'FAILED',
+            retryable = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN 0 ELSE 1 END,
+            result_unknown = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN 1 ELSE 0 END,
+            dedup_key = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN dedup_key ELSE NULL END,
+            error_code = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN #{afterSendCode} ELSE #{beforeSendCode} END,
+            error_message = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
+                THEN '进程中断，外部处理结果未知，请先核对 U8 实际结果'
+                ELSE '进程中断，任务未进入 U8 发送阶段，可由管理员重试' END,
+            end_time = NOW(), update_time = NOW()
+        WHERE status = 'RUNNING' AND start_time &lt; #{staleBefore}
+    </update>
+</mapper>

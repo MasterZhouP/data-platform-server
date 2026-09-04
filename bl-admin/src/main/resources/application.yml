@@ -142,3 +142,33 @@ xss:
   excludes: /system/notice
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*
+
+# 集成执行与外部数据源。外部连接默认关闭，凭据只从环境变量注入。
+integration:
+  execution:
+    payload-max-length: 65535
+    error-max-length: 2000
+    scan-delay-ms: 5000
+    scan-limit: 100
+    stale-running-ms: 600000
+    executor:
+      core-pool-size: 2
+      max-pool-size: 4
+      queue-capacity: 200
+  datasource:
+    oa:
+      enabled: ${INTEGRATION_OA_ENABLED:false}
+      url: ${INTEGRATION_OA_URL:}
+      username: ${INTEGRATION_OA_USERNAME:}
+      password: ${INTEGRATION_OA_PASSWORD:}
+      read-only: true
+      maximum-pool-size: 3
+      connection-timeout: 5000
+    u8:
+      enabled: ${INTEGRATION_U8_ENABLED:false}
+      url: ${INTEGRATION_U8_URL:}
+      username: ${INTEGRATION_U8_USERNAME:}
+      password: ${INTEGRATION_U8_PASSWORD:}
+      read-only: true
+      maximum-pool-size: 3
+      connection-timeout: 5000

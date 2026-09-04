@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.execution.mapper.IntegrationExecutionStageMapper">
+
+    <resultMap id="StageResult" type="com.ruoyi.integration.execution.domain.IntegrationExecutionStage">
+        <id property="stageLogId" column="stage_log_id" />
+        <result property="executionId" column="execution_id" />
+        <result property="sequenceNo" column="sequence_no" />
+        <result property="stage" column="stage" />
+        <result property="stageStatus" column="stage_status" />
+        <result property="requestPayload" column="request_payload" />
+        <result property="responsePayload" column="response_payload" />
+        <result property="errorCode" column="error_code" />
+        <result property="errorMessage" column="error_message" />
+        <result property="startTime" column="start_time" />
+        <result property="endTime" column="end_time" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <insert id="insertExecutionStage" parameterType="com.ruoyi.integration.execution.domain.IntegrationExecutionStage"
+            useGeneratedKeys="true" keyProperty="stageLogId">
+        INSERT INTO int_execution_stage (
+            execution_id, sequence_no, stage, stage_status, request_payload, response_payload,
+            error_code, error_message, start_time, end_time, create_time, update_time
+        ) VALUES (
+            #{executionId}, #{sequenceNo}, #{stage}, #{stageStatus}, #{requestPayload}, #{responsePayload},
+            #{errorCode}, #{errorMessage}, #{startTime}, #{endTime}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updateExecutionStage" parameterType="com.ruoyi.integration.execution.domain.IntegrationExecutionStage">
+        UPDATE int_execution_stage
+        SET stage_status = #{stageStatus}, response_payload = #{responsePayload},
+            error_code = #{errorCode}, error_message = #{errorMessage},
+            end_time = #{endTime}, update_time = #{updateTime}
+        WHERE stage_log_id = #{stageLogId} AND execution_id = #{executionId}
+    </update>
+
+    <update id="failStaleRunningStages">
+        UPDATE int_execution_stage s
+        INNER JOIN int_execution e ON e.execution_id = s.execution_id
+        SET s.stage_status = 'FAILED',
+            s.error_code = CASE WHEN e.stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
+                THEN #{afterSendCode} ELSE #{beforeSendCode} END,
+            s.error_message = CASE WHEN e.stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
+                THEN '进程中断，外部处理结果未知，请先核对 U8 实际结果'
+                ELSE '进程中断，任务未进入 U8 发送阶段，可由管理员重试' END,
+            s.end_time = NOW(), s.update_time = NOW()
+        WHERE e.status = 'RUNNING' AND e.start_time &lt; #{staleBefore}
+          AND s.stage_status = 'STARTED'
+    </update>
+
+    <select id="selectByExecutionId" resultMap="StageResult">
+        SELECT stage_log_id, execution_id, sequence_no, stage, stage_status,
+            request_payload, response_payload, error_code, error_message,
+            start_time, end_time, create_time, update_time
+        FROM int_execution_stage
+        WHERE execution_id = #{executionId}
+        ORDER BY sequence_no ASC, stage_log_id ASC
+    </select>
+</mapper>
