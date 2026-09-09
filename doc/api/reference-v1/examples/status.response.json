@@ -1,0 +1,11 @@
+{
+  "code": "OK",
+  "message": "成功",
+  "requestId": "83c87e30-8aba-4a82-b5d4-9233f52ead48",
+  "executionId": null,
+  "data": {
+    "status": "UP",
+    "apiVersion": "1.0.0",
+    "clientId": "oa-plugin-test"
+  }
+}

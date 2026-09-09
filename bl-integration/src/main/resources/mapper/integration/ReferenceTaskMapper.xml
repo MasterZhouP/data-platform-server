@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.reference.catalog.ReferenceTaskMapper">
+    <resultMap id="Task" type="com.ruoyi.integration.reference.catalog.ReferenceTaskRow">
+        <constructor>
+            <idArg column="task_code" javaType="java.lang.String" />
+            <arg column="task_name" javaType="java.lang.String" />
+            <arg column="enabled" javaType="_boolean" />
+            <arg column="datasource_key" javaType="java.lang.String" />
+            <arg column="sql_resource" javaType="java.lang.String" />
+            <arg column="metadata_json" javaType="java.lang.String" />
+            <arg column="metadata_version" javaType="java.lang.String" />
+        </constructor>
+    </resultMap>
+    <select id="list" resultMap="Task">
+        SELECT task_code, task_name, enabled, datasource_key, sql_resource, metadata_json, metadata_version
+        FROM int_reference_task ORDER BY task_code
+    </select>
+    <select id="find" resultMap="Task">
+        SELECT task_code, task_name, enabled, datasource_key, sql_resource, metadata_json, metadata_version
+        FROM int_reference_task WHERE task_code = #{taskCode}
+    </select>
+    <insert id="insert">
+        INSERT INTO int_reference_task (task_code, task_name, enabled, datasource_key, sql_resource, metadata_json, metadata_version, create_time, update_time)
+        VALUES (#{taskCode}, #{taskName}, #{enabled}, #{datasourceKey}, #{sqlResource}, #{metadataJson}, #{metadataVersion}, NOW(), NOW())
+    </insert>
+    <update id="update">
+        UPDATE int_reference_task SET task_name = #{row.taskName}, enabled = #{row.enabled},
+          datasource_key = #{row.datasourceKey}, sql_resource = #{row.sqlResource},
+          metadata_json = #{row.metadataJson}, metadata_version = #{row.metadataVersion}, update_time = NOW()
+        WHERE task_code = #{row.taskCode} AND metadata_version = #{expectedVersion}
+    </update>
+</mapper>

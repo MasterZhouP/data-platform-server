@@ -1,0 +1,57 @@
+# 替换baseUrl和integrationKey。真实密钥仅放本地环境变量，勿提交或转发。
+# 每次实际发送均重新生成UUID；以下为手工占位值。
+@baseUrl = https://platform.example.invalid/integration/openapi/v1
+@integrationKey = REPLACE_LOCALLY
+@requestId = 83c87e30-8aba-4a82-b5d4-9233f52ead48
+@taskCode = U8_MATERIAL_REFERENCE
+
+### 连接（不代表U8查询通过）
+GET {{baseUrl}}/status
+X-Integration-Key: {{integrationKey}}
+X-Request-Id: {{requestId}}
+
+### 任务目录
+GET {{baseUrl}}/reference/tasks?pageNum=1&pageSize=20
+X-Integration-Key: {{integrationKey}}
+X-Request-Id: {{requestId}}
+
+### 完整元数据
+GET {{baseUrl}}/reference/tasks/{{taskCode}}/metadata
+X-Integration-Key: {{integrationKey}}
+X-Request-Id: {{requestId}}
+
+### 查询（请使用最新metadataVersion）
+POST {{baseUrl}}/reference/tasks/{{taskCode}}/query
+X-Integration-Key: {{integrationKey}}
+X-Request-Id: {{requestId}}
+Content-Type: application/json
+
+{
+  "resultSetCode": "tou",
+  "metadataVersion": "1",
+  "pageNum": 1,
+  "pageSize": 200,
+  "filter": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "cInvName",
+        "operator": "contains",
+        "values": [
+          "清洗"
+        ]
+      }
+    ]
+  },
+  "sort": [
+    {
+      "field": "cInvCode",
+      "direction": "ASC"
+    }
+  ],
+  "parameters": {},
+  "context": {
+    "formId": "demo-form",
+    "masterId": null
+  }
+}

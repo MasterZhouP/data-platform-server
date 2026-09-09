@@ -1,0 +1,17 @@
+{
+  "verifiedAt": "2026-09-07T14:50:19.0174302+08:00",
+  "database": "data_platform",
+  "target": "local MySQL, application datasource credentials",
+  "script": "sql/20260904_stage1_integration.sql",
+  "scriptSHA256": "3A6ABFDFA04DDDD9EA3AF7618E5E57D35FB732160F0C836760CA90F4897787B8",
+  "preflight": "database\tdata_platform\r\nsys_menu_exists\t1\r\nsys_menu_columns\t19\r\nexisting_integration_tables\t0",
+  "migrationExecutions": 2,
+  "secondExecutionUnchanged": true,
+  "schemaAndMenus": "columns\tint_execution\t22\r\ncolumns\tint_execution_stage\t13\r\nunique_index\tint_execution\tPRIMARY\texecution_id\r\nunique_index\tint_execution\tuk_int_execution_dedup_key\tdedup_key\r\nunique_index\tint_execution\tuk_int_execution_retry_of\tretry_of_execution_id\r\nunique_index\tint_execution_stage\tPRIMARY\tstage_log_id\r\nunique_index\tint_execution_stage\tuk_int_stage_execution_sequence\texecution_id,sequence_no\r\nforeign_key\tint_execution_stage\texecution_id\tint_execution\texecution_id\r\npermission\tintegration:execution:list\t1\r\npermission\tintegration:execution:query\t1\r\npermission\tintegration:execution:retry\t1\r\nmenu\t2000\t0\t数据交换\tintegration\t\t\r\nmenu\t2001\t2000\t执行日志\texecution\tintegration/execution/index\tintegration:execution:list\r\nmenu\t2002\t2001\t执行查看\t#\t\tintegration:execution:query\r\nmenu\t2003\t2001\t执行重试\t#\t\tintegration:execution:retry",
+  "transactionalProbe": "insert_and_read\t1\r\nfirst_claim\t1\r\nsecond_claim\t0\r\nfailed_update\t1\r\nfailure_read\t1\r\nprobe_remaining\t0\r\nprobe_stages_remaining\t0",
+  "recordCountsBefore": "records\t0\t0",
+  "recordCountsAfter": "records\t0\t0",
+  "applicationStartupVerified": false,
+  "oaConnectivityVerified": false,
+  "u8ConnectivityVerified": false
+}

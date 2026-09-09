@@ -41,9 +41,11 @@
         UPDATE int_execution_stage s
         INNER JOIN int_execution e ON e.execution_id = s.execution_id
         SET s.stage_status = 'FAILED',
-            s.error_code = CASE WHEN e.stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
+            s.error_code = CASE WHEN LEFT(e.stage, 10) = 'REFERENCE_' THEN 'PROCESS_INTERRUPTED'
+                WHEN e.stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
                 THEN #{afterSendCode} ELSE #{beforeSendCode} END,
-            s.error_message = CASE WHEN e.stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
+            s.error_message = CASE WHEN LEFT(e.stage, 10) = 'REFERENCE_' THEN '进程中断，参照查询未完成，请重新发起查询'
+                WHEN e.stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
                 THEN '进程中断，外部处理结果未知，请先核对 U8 实际结果'
                 ELSE '进程中断，任务未进入 U8 发送阶段，可由管理员重试' END,
             s.end_time = NOW(), s.update_time = NOW()

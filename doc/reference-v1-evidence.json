@@ -1,0 +1,133 @@
+{
+  "date": "2026-09-07",
+  "backendBuild": "mvn -B clean package",
+  "backendBuildResult": "PASS",
+  "backendTests": 77.0,
+  "failures": 0.0,
+  "errors": 0.0,
+  "skipped": 0.0,
+  "frontendBuild": "Vite production build PASS",
+  "frontendModelTests": 5,
+  "scope": "Local code validation with H2/JDBC fixtures; no real MySQL migration, U8/OA connectivity or full application/browser verification",
+  "suites": [
+    {
+      "name": "com.ruoyi.web.controller.integration.IntegrationExecutionControllerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.web.controller.integration.reference.ReferenceAdminErrorTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.web.controller.integration.reference.ReferenceApiSecurityTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.web.controller.integration.reference.ReferenceOpenApiControllerTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.web.controller.integration.reference.ReferenceSecurityChainTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.ArchitectureSmokeTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.datasource.IntegrationExternalDataSourceConfigTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.execution.mapper.MapperXmlContractTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.execution.service.IntegrationExecutionFlowTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.execution.support.SensitiveDataMaskerTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.reference.catalog.ReferenceCatalogTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.reference.catalog.ReferenceTaskMapperTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.reference.engine.ReferenceEngineTest",
+      "tests": 31,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.reference.service.ReferenceContextPersistenceTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.reference.service.ReferenceQueryServiceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.reference.service.ReferenceRecoveryTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "com.ruoyi.integration.task.PushHandlerRegistryTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

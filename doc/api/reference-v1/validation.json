@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "scope": "静态契约校验，不代表已实现或部署，不包含真实OA/U8联调",
+  "openapiVersion": "3.0.3",
+  "apiVersion": "1.0.0",
+  "operationCount": 4,
+  "schemaCount": 21,
+  "validatedApiExamples": 9,
+  "rejectedInvalidRequestExamples": 5,
+  "materialFieldCount": 14,
+  "checks": [
+    "OpenAPI规范",
+    "全部API样例schema",
+    "元数据和结果字段一致",
+    "前导零/精度/空值/同编码多行",
+    "映射引用合法",
+    "分页总数一致",
+    "认证与请求ID声明",
+    "文档路径与本地链接"
+  ],
+  "remainingRuntimeChecks": "README第9节全部真实环境验收项"
+}

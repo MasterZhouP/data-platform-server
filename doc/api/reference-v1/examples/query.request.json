@@ -1,0 +1,29 @@
+{
+  "resultSetCode": "tou",
+  "metadataVersion": "1",
+  "pageNum": 1,
+  "pageSize": 200,
+  "filter": {
+    "logic": "AND",
+    "conditions": [
+      {
+        "field": "cInvName",
+        "operator": "contains",
+        "values": [
+          "清洗"
+        ]
+      }
+    ]
+  },
+  "sort": [
+    {
+      "field": "cInvCode",
+      "direction": "ASC"
+    }
+  ],
+  "parameters": {},
+  "context": {
+    "formId": "demo-form",
+    "masterId": null
+  }
+}

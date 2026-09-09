@@ -1,0 +1,11 @@
+{
+  "status.response.json": "StatusResponse",
+  "tasks.response.json": "TaskPageResponse",
+  "metadata.response.json": "MetadataResponse",
+  "query.request.json": "QueryRequest",
+  "query.response.json": "QueryPageResponse",
+  "query-empty.response.json": "QueryPageResponse",
+  "query-version-conflict.response.json": "ErrorResponse",
+  "query-timeout.response.json": "ErrorResponse",
+  "unauthorized.response.json": "ErrorResponse"
+}

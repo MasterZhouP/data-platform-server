@@ -112,7 +112,7 @@
 
     <update id="markSuccess">
         UPDATE int_execution
-        SET status = 'SUCCESS', stage = 'COMPLETED', retryable = 0, result_unknown = 0,
+        SET status = 'SUCCESS', stage = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 'REFERENCE_COMPLETED' ELSE 'COMPLETED' END, retryable = 0, result_unknown = 0,
             business_key = COALESCE(business_key, #{businessKey}),
             request_payload = #{requestPayload}, response_payload = #{responsePayload},
             error_code = NULL, error_message = NULL, end_time = #{endTime}, update_time = #{endTime}
@@ -131,11 +131,12 @@
     <update id="failStaleRunning">
         UPDATE int_execution
         SET status = 'FAILED',
-            retryable = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN 0 ELSE 1 END,
+            retryable = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 0 WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN 0 ELSE 1 END,
             result_unknown = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN 1 ELSE 0 END,
             dedup_key = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN dedup_key ELSE NULL END,
-            error_code = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN #{afterSendCode} ELSE #{beforeSendCode} END,
-            error_message = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
+            error_code = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 'PROCESS_INTERRUPTED' WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN #{afterSendCode} ELSE #{beforeSendCode} END,
+            error_message = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN '进程中断，参照查询未完成，请重新发起查询'
+                WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
                 THEN '进程中断，外部处理结果未知，请先核对 U8 实际结果'
                 ELSE '进程中断，任务未进入 U8 发送阶段，可由管理员重试' END,
             end_time = NOW(), update_time = NOW()

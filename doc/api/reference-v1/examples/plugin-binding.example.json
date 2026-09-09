@@ -1,0 +1,48 @@
+{
+  "description": "仅为插件内部配置示意，非平台API；所有OA字段ID均为占位值",
+  "serviceName": "BL数据交换平台",
+  "taskCode": "U8_MATERIAL_REFERENCE",
+  "resultSetCode": "tou",
+  "metadataVersion": "1",
+  "selectorField": "field0001",
+  "selectionMode": "SINGLE",
+  "displayFields": [
+    "cInvCode",
+    "cInvName",
+    "cInvStd",
+    "zdw",
+    "fdw",
+    "zldj"
+  ],
+  "filterFields": [
+    "cInvCode",
+    "cInvName",
+    "cInvStd"
+  ],
+  "mappings": [
+    {
+      "sourceField": "cInvCode",
+      "targetField": "field0001"
+    },
+    {
+      "sourceField": "cInvName",
+      "targetField": "field0002"
+    },
+    {
+      "sourceField": "cInvStd",
+      "targetField": "field0003"
+    },
+    {
+      "sourceField": "zdw",
+      "targetField": "field0004"
+    },
+    {
+      "sourceField": "hsl",
+      "targetField": "field0005"
+    },
+    {
+      "sourceField": "mrscbm",
+      "targetField": "field0006"
+    }
+  ]
+}

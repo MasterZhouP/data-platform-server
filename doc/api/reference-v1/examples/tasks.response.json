@@ -1,0 +1,19 @@
+{
+  "code": "OK",
+  "message": "成功",
+  "requestId": "83c87e30-8aba-4a82-b5d4-9233f52ead48",
+  "executionId": null,
+  "data": {
+    "items": [
+      {
+        "taskCode": "U8_MATERIAL_REFERENCE",
+        "taskName": "物料参照",
+        "metadataVersion": "1"
+      }
+    ],
+    "total": 1,
+    "pageNum": 1,
+    "pageSize": 20,
+    "totalPages": 1
+  }
+}

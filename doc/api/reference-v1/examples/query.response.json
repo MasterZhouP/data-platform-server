@@ -1,0 +1,49 @@
+{
+  "code": "OK",
+  "message": "成功",
+  "requestId": "83c87e30-8aba-4a82-b5d4-9233f52ead48",
+  "executionId": "9007199254740993",
+  "data": {
+    "taskCode": "U8_MATERIAL_REFERENCE",
+    "resultSetCode": "tou",
+    "metadataVersion": "1",
+    "rows": [
+      {
+        "jz": "25.000000",
+        "zdwbm": "0001",
+        "fdwbm": "0002",
+        "cInvCode": "00000050003",
+        "cInvName": "清洗剂（模拟物料）",
+        "cInvStd": "10kg*2桶/箱",
+        "zdw": "桶",
+        "fdw": "箱",
+        "hsl": "2.000000",
+        "zldj": "",
+        "iMassDate": "365",
+        "chdl": "模拟存货类",
+        "cd": null,
+        "mrscbm": "DEMO001"
+      },
+      {
+        "jz": "25.000000",
+        "zdwbm": "0001",
+        "fdwbm": "0002",
+        "cInvCode": "00000050003",
+        "cInvName": "清洗剂（模拟物料）",
+        "cInvStd": "10kg*2桶/箱",
+        "zdw": "桶",
+        "fdw": "箱",
+        "hsl": "2.100000",
+        "zldj": "",
+        "iMassDate": "365",
+        "chdl": "模拟存货类",
+        "cd": null,
+        "mrscbm": "DEMO001"
+      }
+    ],
+    "total": 2,
+    "pageNum": 1,
+    "pageSize": 200,
+    "totalPages": 1
+  }
+}
