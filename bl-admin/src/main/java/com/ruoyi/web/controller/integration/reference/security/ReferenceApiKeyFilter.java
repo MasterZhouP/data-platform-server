@@ -3,8 +3,8 @@ package com.ruoyi.web.controller.integration.reference.security;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.List;
+// import java.security.MessageDigest;
+// import java.util.List;
 import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.web.controller.integration.reference.ReferenceApiResponses;
@@ -16,18 +16,20 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
+// import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+// import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /** Service-only boundary; intentionally not a servlet @Component outside its security chain. */
 public class ReferenceApiKeyFilter extends OncePerRequestFilter
 {
-    private final ReferenceApiProperties properties;
+    // 鉴权暂时禁用，保留属性依赖位置以便后续恢复服务凭据校验。
+    // private final ReferenceApiProperties properties;
     private final ObjectMapper mapper;
     public ReferenceApiKeyFilter(ReferenceApiProperties properties, ObjectMapper mapper)
     {
-        this.properties = properties; this.mapper = mapper;
+        // this.properties = properties;
+        this.mapper = mapper;
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -43,26 +45,28 @@ public class ReferenceApiKeyFilter extends OncePerRequestFilter
         {
             fail(response, id, 400, "INVALID_ARGUMENT", "X-Request-Id 必须为 UUID"); return;
         }
-        String suppliedKey = request.getHeader("X-Integration-Key");
-        ReferenceApiProperties.Client client = null;
-        if (suppliedKey != null && suppliedKey.length() <= 4096 && properties.getClients() != null)
-        {
-            for (var candidate : properties.getClients())
-            {
-                String key = candidate.getKey();
-                if (key != null && key.length() >= 32 && MessageDigest.isEqual(
-                        key.getBytes(StandardCharsets.UTF_8), suppliedKey.getBytes(StandardCharsets.UTF_8)))
-                    client = candidate;
-            }
-        }
-        if (client == null || client.getClientId() == null || client.getClientId().isBlank())
-        {
-            fail(response, id, 401, "UNAUTHORIZED", "服务凭据缺失或无效"); return;
-        }
-        if (!client.isEnabled())
-        {
-            fail(response, id, 403, "FORBIDDEN", "服务身份已停用"); return;
-        }
+        // OA 插件与平台当前同包、同服务器部署，暂时关闭 X-Integration-Key 鉴权。
+        // 恢复鉴权时取消以下代码注释，并恢复文件顶部的相关 import 与 properties 字段赋值。
+        // String suppliedKey = request.getHeader("X-Integration-Key");
+        // ReferenceApiProperties.Client client = null;
+        // if (suppliedKey != null && suppliedKey.length() <= 4096 && properties.getClients() != null)
+        // {
+        //     for (var candidate : properties.getClients())
+        //     {
+        //         String key = candidate.getKey();
+        //         if (key != null && key.length() >= 32 && MessageDigest.isEqual(
+        //                 key.getBytes(StandardCharsets.UTF_8), suppliedKey.getBytes(StandardCharsets.UTF_8)))
+        //             client = candidate;
+        //     }
+        // }
+        // if (client == null || client.getClientId() == null || client.getClientId().isBlank())
+        // {
+        //     fail(response, id, 401, "UNAUTHORIZED", "服务凭据缺失或无效"); return;
+        // }
+        // if (!client.isEnabled())
+        // {
+        //     fail(response, id, 403, "FORBIDDEN", "服务身份已停用"); return;
+        // }
         HttpServletRequest effectiveRequest = request;
         if ("POST".equals(request.getMethod()))
         {
@@ -94,8 +98,9 @@ public class ReferenceApiKeyFilter extends OncePerRequestFilter
                 @Override public long getContentLengthLong() { return body.length; }
             };
         }
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(client, null, List.of()));
+        // 鉴权暂时禁用：不再向 SecurityContext 写入服务身份。
+        // SecurityContextHolder.getContext().setAuthentication(
+        //         new UsernamePasswordAuthenticationToken(client, null, List.of()));
         chain.doFilter(effectiveRequest, response);
     }
 

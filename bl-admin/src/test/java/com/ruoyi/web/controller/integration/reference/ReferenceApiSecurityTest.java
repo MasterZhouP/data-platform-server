@@ -18,33 +18,36 @@ class ReferenceApiSecurityTest
 
     @AfterEach void clear() { SecurityContextHolder.clearContext(); }
 
-    @Test void missingKeyIsJsonUnauthorizedNotAnonymousSuccess() throws Exception
+    @Test void missingKeyContinuesThroughTemporaryAuthenticationBypass() throws Exception
     {
-        MockHttpServletResponse response = invoke(request(null), properties(true), false);
-        assertEquals(401, response.getStatus());
-        assertEquals("UNAUTHORIZED", new ObjectMapper().readTree(response.getContentAsByteArray()).path("code").asText());
+        MockHttpServletResponse response = invoke(request(null), new ReferenceApiProperties(), true);
+        // 鉴权恢复时重新启用以下断言：无服务 Key 必须返回 401。
+        // assertEquals(401, response.getStatus());
+        // assertEquals("UNAUTHORIZED", new ObjectMapper().readTree(response.getContentAsByteArray()).path("code").asText());
+        assertEquals(200, response.getStatus());
         assertEquals(ID, response.getHeader("X-Request-Id"));
         assertEquals("no-store", response.getHeader("Cache-Control"));
     }
 
-    @Test void validDedicatedKeyEstablishesOnlyItsConfiguredTaskIdentity() throws Exception
-    {
-        invoke(request(KEY), properties(true), true);
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        assertNotNull(auth);
-        assertTrue(auth.isAuthenticated());
-        assertEquals("oa-test", auth.getName());
-        assertTrue(auth.getAuthorities().isEmpty());
-    }
+    // 鉴权暂时禁用：保留原服务身份测试，恢复 X-Integration-Key 时一并恢复。
+    // @Test void validDedicatedKeyEstablishesOnlyItsConfiguredTaskIdentity() throws Exception
+    // {
+    //     invoke(request(KEY), properties(true), true);
+    //     var auth = SecurityContextHolder.getContext().getAuthentication();
+    //     assertNotNull(auth);
+    //     assertTrue(auth.isAuthenticated());
+    //     assertEquals("oa-test", auth.getName());
+    //     assertTrue(auth.getAuthorities().isEmpty());
+    // }
 
-    @Test void disabledClientCannotUseOtherwiseCorrectKey() throws Exception
-    {
-        assertEquals(403, invoke(request(KEY), properties(false), false).getStatus());
-    }
+    // @Test void disabledClientCannotUseOtherwiseCorrectKey() throws Exception
+    // {
+    //     assertEquals(403, invoke(request(KEY), properties(false), false).getStatus());
+    // }
 
     @Test void malformedRequestIdGetsReplacementAndReadable400() throws Exception
     {
-        var request = request(KEY);
+        var request = request(null);
         request.removeHeader("X-Request-Id");
         request.addHeader("X-Request-Id", "bad-id");
         var response = invoke(request, properties(true), false);
@@ -54,7 +57,7 @@ class ReferenceApiSecurityTest
 
     @Test void chunkedOversizeBodyIsRejectedEvenWithoutContentLength() throws Exception
     {
-        var request = request(KEY);
+        var request = request(null);
         request.setMethod("POST");
         request.setContentType("application/json");
         request.setContent(new byte[65537]);

@@ -147,13 +147,14 @@ xss:
 integration:
   reference:
     api:
-      # 服务凭据仅留在 OA 插件服务端；默认关闭，配置至少 32 字符随机密钥后启用。
-      clients:
-        - client-id: oa-plugin-test
-          enabled: ${INTEGRATION_REFERENCE_API_ENABLED:false}
-          key: ${INTEGRATION_REFERENCE_API_KEY:}
-          task-codes:
-            - U8_MATERIAL_REFERENCE
+      # OA 插件与平台当前同包、同服务器部署，X-Integration-Key 鉴权暂时禁用。
+      # 后续拆分部署时恢复以下服务身份配置，并生成至少 32 字符的随机密钥。
+      # clients:
+      #   - client-id: oa-plugin-test
+      #     enabled: ${INTEGRATION_REFERENCE_API_ENABLED:false}
+      #     key: ${INTEGRATION_REFERENCE_API_KEY:}
+      #     task-codes:
+      #       - U8_MATERIAL_REFERENCE
   execution:
     payload-max-length: 65535
     error-max-length: 2000
@@ -166,18 +167,18 @@ integration:
       queue-capacity: 200
   datasource:
     oa:
-      enabled: ${INTEGRATION_OA_ENABLED:true}
-      url: ${INTEGRATION_OA_URL:}
-      username: ${INTEGRATION_OA_USERNAME:}
-      password: ${INTEGRATION_OA_PASSWORD:}
+      enabled: true
+      url: j​​dbc:sqlserver://ae6qe7258136.vicp.fun:35799;databaseName=a8;encrypt=true;trustServerCertificate=true
+      username: sa
+      password: 123456Abc
       read-only: true
       maximum-pool-size: 3
       connection-timeout: 5000
     u8:
-      enabled: ${INTEGRATION_U8_ENABLED:true}
-      url: ${INTEGRATION_U8_URL:}
-      username: ${INTEGRATION_U8_USERNAME:}
-      password: ${INTEGRATION_U8_PASSWORD:}
+      enabled: true
+      url: jdbc:sqlserver://ae6qe7258136.vicp.fun:35799;databaseName=UFDATA_123_2023;encrypt=true;trustServerCertificate=true
+      username: sa
+      password: 123456Abc
       read-only: true
       maximum-pool-size: 3
       connection-timeout: 5000

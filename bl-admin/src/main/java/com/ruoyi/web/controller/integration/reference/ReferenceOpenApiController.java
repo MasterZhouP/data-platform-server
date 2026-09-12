@@ -11,9 +11,9 @@ import com.ruoyi.integration.reference.catalog.ReferenceCatalog;
 import com.ruoyi.integration.reference.model.ReferenceException;
 import com.ruoyi.integration.reference.model.ReferenceTask;
 import com.ruoyi.integration.reference.service.ReferenceQueryService;
-import com.ruoyi.web.controller.integration.reference.security.ReferenceApiProperties;
+// import com.ruoyi.web.controller.integration.reference.security.ReferenceApiProperties;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.security.core.context.SecurityContextHolder;
+// import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -32,7 +32,9 @@ public class ReferenceOpenApiController
     public Map<String, Object> status(HttpServletRequest request)
     {
         allowedParameters(request, Set.of());
-        return ok(request, Map.of("status", "UP", "apiVersion", "1.0.0", "clientId", client().getClientId()));
+        // 鉴权暂时禁用，保留 clientId 响应字段以避免破坏 OA 插件现有解析结构。
+        // return ok(request, Map.of("status", "UP", "apiVersion", "1.0.0", "clientId", client().getClientId()));
+        return ok(request, Map.of("status", "UP", "apiVersion", "1.0.0", "clientId", "AUTHENTICATION_DISABLED"));
     }
 
     @GetMapping("/reference/tasks")
@@ -44,9 +46,10 @@ public class ReferenceOpenApiController
         String keyword = request.getParameter("keyword");
         if (keyword != null && keyword.length() > 100) throw invalid("keyword 最长 100 字符");
         String search = keyword == null ? "" : keyword.toLowerCase(Locale.ROOT);
-        var identity = client();
+        // 鉴权暂时禁用：目录仍只返回已启用任务，但不再按服务身份的 taskCodes 二次过滤。
+        // var identity = client();
         List<ReferenceTask> tasks = catalog.list().stream().filter(ReferenceTask::enabled)
-                .filter(t -> identity.allows(t.taskCode()))
+                // .filter(t -> identity.allows(t.taskCode()))
                 .filter(t -> t.taskCode().toLowerCase(Locale.ROOT).contains(search)
                         || t.taskName().toLowerCase(Locale.ROOT).contains(search))
                 .sorted(Comparator.comparing(ReferenceTask::taskCode)).toList();
@@ -78,19 +81,21 @@ public class ReferenceOpenApiController
 
     private ReferenceTask accessibleTask(String taskCode)
     {
-        if (!client().allows(taskCode)) throw new ReferenceException("TASK_NOT_FOUND", 404, "参照任务不存在或无访问权限");
+        // 鉴权暂时禁用：取消客户端 taskCodes 授权，但 taskCode 仍必须在任务目录中精确匹配。
+        // if (!client().allows(taskCode)) throw new ReferenceException("TASK_NOT_FOUND", 404, "参照任务不存在或无访问权限");
         ReferenceTask task = catalog.get(taskCode);
         if (!task.enabled()) throw new ReferenceException("TASK_DISABLED", 409, "参照任务已停用");
         return task;
     }
 
-    private ReferenceApiProperties.Client client()
-    {
-        var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !(auth.getPrincipal() instanceof ReferenceApiProperties.Client client))
-            throw new ReferenceException("UNAUTHORIZED", 401, "服务凭据缺失或无效");
-        return client;
-    }
+    // 鉴权暂时禁用：保留原服务身份读取逻辑，后续恢复 X-Integration-Key 时取消注释。
+    // private ReferenceApiProperties.Client client()
+    // {
+    //     var auth = SecurityContextHolder.getContext().getAuthentication();
+    //     if (auth == null || !(auth.getPrincipal() instanceof ReferenceApiProperties.Client client))
+    //         throw new ReferenceException("UNAUTHORIZED", 401, "服务凭据缺失或无效");
+    //     return client;
+    // }
     private Map<String, Object> ok(HttpServletRequest request, Object data)
     {
         return ReferenceApiResponses.success(ReferenceApiResponses.requestId(request), null, data);
