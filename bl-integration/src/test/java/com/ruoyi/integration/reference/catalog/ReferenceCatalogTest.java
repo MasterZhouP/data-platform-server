@@ -51,6 +51,17 @@ class ReferenceCatalogTest {
         assertThrows(ReferenceException.class, () -> catalog.save("demo", task));
     }
 
+    @Test void getRejectsCaseInsensitiveDatabaseMatch() throws Exception {
+        var task = task();
+        when(mapper.find("demo")).thenReturn(new ReferenceTaskRow("DEMO", "示例", true, "u8",
+                task.sqlResource(), task.metadata().toString(), "old"));
+
+        var error = assertThrows(ReferenceException.class, () -> catalog.get("demo"));
+
+        assertEquals("TASK_NOT_FOUND", error.code());
+        assertEquals(404, error.httpStatus());
+    }
+
     @Test void acceptsCompleteSqlColumnLabelsIncludingChineseAndClosingBracket() throws Exception {
         var original = task();
         var metadata = (ObjectNode) json.readTree(original.metadata().toString().replace("\"code\"", "\"库存]编码\""));
