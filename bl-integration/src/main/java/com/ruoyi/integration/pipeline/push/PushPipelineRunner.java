@@ -4,11 +4,14 @@ import java.util.Date;
 import com.ruoyi.integration.execution.domain.IntegrationExecution;
 import com.ruoyi.integration.execution.repository.ExecutionRepository;
 import com.ruoyi.integration.execution.support.SensitiveDataMasker;
-import com.ruoyi.integration.task.OaToU8PushHandler;
+import com.ruoyi.integration.task.IntegrationTaskHandler;
 import com.ruoyi.integration.task.PushExecutionContext;
 import com.ruoyi.integration.task.PushFailureException;
 import com.ruoyi.integration.task.PushHandlerRegistry;
 import com.ruoyi.integration.task.PushResult;
+import com.ruoyi.integration.task.PushOutcome;
+import com.ruoyi.integration.task.TaskAction;
+import com.ruoyi.integration.task.TriggerSource;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -37,21 +40,35 @@ public class PushPipelineRunner
         PersistentStageRecorder recorder = new PersistentStageRecorder(executionId, repository, masker);
         try
         {
-            OaToU8PushHandler handler = handlerRegistry.require(execution.getTaskCode());
+            IntegrationTaskHandler handler = handlerRegistry.require(execution.getTaskCode());
             PushExecutionContext context = new PushExecutionContext(executionId, execution.getTaskCode(),
                     execution.getMasterId(), execution.getBusinessKey(), execution.getFormId(),
-                    execution.getSummaryId(), execution.getRetryCount() == null ? 0 : execution.getRetryCount());
+                    execution.getSummaryId(), execution.getRetryCount() == null ? 0 : execution.getRetryCount(),
+                    TaskAction.valueOf(execution.getOperation()), TriggerSource.valueOf(execution.getTriggerSource()),
+                    Boolean.TRUE.equals(execution.getForce()));
             PushResult result = handler.execute(context, recorder);
+            if (PushOutcome.SKIPPED.equals(result.outcome()))
+            {
+                repository.markSkipped(executionId, result.businessKey(), masker.maskError(result.message()), new Date());
+                return;
+            }
             recorder.started("COMPLETED", null);
             recorder.succeeded("COMPLETED", null);
             repository.markSuccess(executionId, result.businessKey(), masker.mask(result.requestPayload()),
-                    masker.mask(result.responsePayload()), new Date());
+                    masker.mask(result.responsePayload()), handler.retainDedupAfterSuccess(), new Date());
         }
         catch (PushFailureException ex)
         {
             recorder.failCurrent(ex.getErrorCode(), ex.getMessage());
-            repository.markFailed(executionId, ex.getErrorCode(), masker.maskError(ex.getMessage()),
-                    ex.isRetryable(), ex.isResultUnknown(), new Date());
+            if (ex.isResultUnknown())
+            {
+                repository.markResultUnknown(executionId, ex.getErrorCode(), masker.maskError(ex.getMessage()), new Date());
+            }
+            else
+            {
+                repository.markFailed(executionId, ex.getErrorCode(), masker.maskError(ex.getMessage()),
+                        ex.isRetryable(), false, new Date());
+            }
         }
         catch (RuntimeException ex)
         {

@@ -15,7 +15,7 @@ class PushHandlerRegistryTest
     @Test
     void findsHandlerByStableTaskCode()
     {
-        OaToU8PushHandler handler = handler("TEST_TASK");
+        IntegrationTaskHandler handler = handler("TEST_TASK");
 
         PushHandlerRegistry registry = new PushHandlerRegistry(List.of(handler));
 
@@ -43,9 +43,9 @@ class PushHandlerRegistryTest
         assertTrue(unknown.isResultUnknown());
     }
 
-    private OaToU8PushHandler handler(String taskCode)
+    private IntegrationTaskHandler handler(String taskCode)
     {
-        OaToU8PushHandler handler = mock(OaToU8PushHandler.class);
+        IntegrationTaskHandler handler = mock(IntegrationTaskHandler.class);
         when(handler.taskCode()).thenReturn(taskCode);
         return handler;
     }

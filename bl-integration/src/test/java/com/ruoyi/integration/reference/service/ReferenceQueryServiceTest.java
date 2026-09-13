@@ -52,7 +52,8 @@ class ReferenceQueryServiceTest {
         assertTrue(execution.getTriggerPayload().contains("same-request"));
         assertFalse(execution.getTriggerPayload().contains("secret-value"));
         assertNotEquals(execution.getDedupKey(), inserted.getAllValues().get(1).getDedupKey());
-        verify(repository, times(2)).markSuccess(anyLong(), isNull(), anyString(), argThat(value -> !value.contains("secret-row")), any());
+        verify(repository, times(2)).markSuccess(anyLong(), isNull(), anyString(),
+                argThat(value -> !value.contains("secret-row")), org.mockito.ArgumentMatchers.eq(true), any());
         verify(repository, never()).claimPending(anyLong(), any());
     }
 

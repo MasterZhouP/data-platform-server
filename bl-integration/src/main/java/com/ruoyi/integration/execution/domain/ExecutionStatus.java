@@ -5,5 +5,7 @@ public enum ExecutionStatus
     PENDING,
     RUNNING,
     SUCCESS,
-    FAILED
+    FAILED,
+    SKIPPED,
+    RESULT_UNKNOWN
 }

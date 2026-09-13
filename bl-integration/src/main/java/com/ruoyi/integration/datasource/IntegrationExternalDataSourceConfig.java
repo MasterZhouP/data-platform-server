@@ -51,6 +51,7 @@ public class IntegrationExternalDataSourceConfig
     @ConditionalOnProperty(prefix = "integration.datasource.u8", name = "enabled", havingValue = "true")
     public DataSource u8DataSource(@Qualifier("u8DataSourceProperties") IntegrationSqlServerProperties properties)
     {
+        properties.setReadOnly(true);
         return buildDataSource("integration-u8", properties);
     }
 

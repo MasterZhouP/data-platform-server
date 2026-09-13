@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.sync.salesoutbound.link.OaProcessLinkMapper">
+
+    <resultMap id="ProcessLinkResult" type="com.ruoyi.integration.sync.salesoutbound.link.OaProcessLink">
+        <id property="linkId" column="link_id" />
+        <result property="taskCode" column="task_code" />
+        <result property="businessKey" column="business_key" />
+        <result property="u8Id" column="u8_id" />
+        <result property="summaryId" column="summary_id" />
+        <result property="affairId" column="affair_id" />
+        <result property="processId" column="process_id" />
+        <result property="state" column="state" javaType="com.ruoyi.integration.sync.salesoutbound.link.ProcessLinkState" />
+        <result property="versionNo" column="version_no" />
+        <result property="previousLinkId" column="previous_link_id" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <sql id="columns">
+        link_id, task_code, business_key, u8_id, summary_id, affair_id, process_id,
+        state, version_no, previous_link_id, create_time, update_time
+    </sql>
+
+    <select id="selectLatest" resultMap="ProcessLinkResult">
+        SELECT <include refid="columns" />
+        FROM int_oa_process_link
+        WHERE task_code = #{taskCode} AND business_key = #{businessKey}
+        ORDER BY version_no DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestForUpdate" resultMap="ProcessLinkResult">
+        SELECT <include refid="columns" />
+        FROM int_oa_process_link
+        WHERE task_code = #{taskCode} AND business_key = #{businessKey}
+        ORDER BY version_no DESC
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <insert id="insert" parameterType="com.ruoyi.integration.sync.salesoutbound.link.OaProcessLink"
+            useGeneratedKeys="true" keyProperty="linkId">
+        INSERT INTO int_oa_process_link (
+            task_code, business_key, u8_id, summary_id, affair_id, process_id,
+            state, version_no, previous_link_id, create_time, update_time
+        ) VALUES (
+            #{taskCode}, #{businessKey}, #{u8Id}, #{summaryId}, #{affairId}, #{processId},
+            #{state}, #{versionNo}, #{previousLinkId}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updateState">
+        UPDATE int_oa_process_link
+        SET state = #{state}, update_time = NOW()
+        WHERE link_id = #{linkId}
+    </update>
+
+    <update id="activate">
+        UPDATE int_oa_process_link
+        SET summary_id = #{process.summaryId}, affair_id = #{process.affairId},
+            process_id = #{process.processId}, state = 'ACTIVE', update_time = NOW()
+        WHERE link_id = #{linkId} AND state = 'CREATING'
+    </update>
+</mapper>

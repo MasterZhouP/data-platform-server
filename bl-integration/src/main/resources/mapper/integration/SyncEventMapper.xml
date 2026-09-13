@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.sync.schedule.SyncEventMapper">
+    <resultMap id="SyncEventResult" type="com.ruoyi.integration.sync.schedule.SyncEvent">
+        <constructor>
+            <arg column="source_event_id" javaType="java.lang.String" />
+            <arg column="task_code" javaType="java.lang.String" />
+            <arg column="document_no" javaType="java.lang.String" />
+            <arg column="operation" javaType="com.ruoyi.integration.task.TaskAction" />
+            <arg column="changed_at" javaType="java.time.LocalDateTime" />
+            <arg column="status" javaType="com.ruoyi.integration.sync.schedule.SyncEventStatus" />
+            <arg column="execution_id" javaType="java.lang.Long" />
+        </constructor>
+    </resultMap>
+
+    <insert id="insertIgnore">
+        INSERT INTO int_sync_event(
+            source_event_id, task_code, document_no, operation, changed_at,
+            status, execution_id, create_time, update_time
+        ) VALUES (
+            #{sourceEventId}, #{taskCode}, #{documentNo}, #{action}, #{changedAt},
+            'PENDING', NULL, NOW(), NOW()
+        )
+        ON DUPLICATE KEY UPDATE source_event_id = VALUES(source_event_id)
+    </insert>
+
+    <select id="selectPendingForUpdate" resultMap="SyncEventResult">
+        SELECT source_event_id, task_code, document_no, operation, changed_at, status, execution_id
+        FROM int_sync_event
+        WHERE task_code = #{taskCode} AND status = 'PENDING'
+        ORDER BY changed_at, event_id
+        FOR UPDATE
+    </select>
+
+    <update id="markAccepted">
+        UPDATE int_sync_event
+        SET status = 'ACCEPTED', execution_id = #{executionId}, update_time = NOW()
+        WHERE source_event_id = #{sourceEventId} AND status = 'PENDING'
+    </update>
+
+    <update id="markSuperseded">
+        UPDATE int_sync_event
+        SET status = 'SUPERSEDED', update_time = NOW()
+        WHERE source_event_id = #{sourceEventId} AND status = 'PENDING'
+    </update>
+</mapper>

@@ -17,7 +17,12 @@ class ReferenceRecoveryTest {
         db.setURL("jdbc:h2:mem:recovery;MODE=MySQL;DB_CLOSE_DELAY=-1");
         try (var c = db.getConnection(); var s = c.createStatement()) {
             s.execute("CREATE TABLE int_execution (execution_id BIGINT, stage VARCHAR(50), status VARCHAR(20), retryable INT, result_unknown INT, dedup_key VARCHAR(200), error_code VARCHAR(100), error_message VARCHAR(2000), start_time TIMESTAMP, end_time TIMESTAMP, update_time TIMESTAMP)");
-            s.execute("INSERT INTO int_execution (execution_id, stage, status, dedup_key, start_time) VALUES (1,'REFERENCE_QUERY','RUNNING','ref','2000-01-01'), (2,'RECEIVED','RUNNING','push-before','2000-01-01'), (3,'U8_REQUEST_SENT','RUNNING','push-after','2000-01-01')");
+            s.execute("INSERT INTO int_execution (execution_id, stage, status, dedup_key, start_time) VALUES "
+                    + "(1,'REFERENCE_QUERY','RUNNING','ref','2000-01-01'),"
+                    + "(2,'RECEIVED','RUNNING','push-before','2000-01-01'),"
+                    + "(3,'U8_REQUEST_SENT','RUNNING','push-after','2000-01-01'),"
+                    + "(4,'START_OA_PROCESS','RUNNING','oa-start','2000-01-01'),"
+                    + "(5,'CANCEL_OLD','RUNNING','oa-cancel','2000-01-01')");
         }
         Configuration configuration = new Configuration(new Environment("test", new JdbcTransactionFactory(), db));
         String path = "mapper/integration/IntegrationExecutionMapper.xml";
@@ -25,7 +30,7 @@ class ReferenceRecoveryTest {
             new XMLMapperBuilder(input, configuration, path, configuration.getSqlFragments()).parse();
         }
         try (var session = new SqlSessionFactoryBuilder().build(configuration).openSession(true)) {
-            assertEquals(3, session.getMapper(IntegrationExecutionMapper.class).failStaleRunning(new Date(), "BEFORE", "AFTER"));
+            assertEquals(5, session.getMapper(IntegrationExecutionMapper.class).failStaleRunning(new Date(), "BEFORE", "AFTER"));
         }
         try (var c = db.getConnection(); var s = c.createStatement(); var rows = s.executeQuery("SELECT * FROM int_execution ORDER BY execution_id")) {
             assertTrue(rows.next());
@@ -39,6 +44,15 @@ class ReferenceRecoveryTest {
             assertTrue(rows.next());
             assertEquals(0, rows.getInt("retryable"));
             assertEquals(1, rows.getInt("result_unknown"));
+            assertEquals("RESULT_UNKNOWN", rows.getString("status"));
+            assertEquals("AFTER", rows.getString("error_code"));
+            assertTrue(rows.next());
+            assertEquals(1, rows.getInt("result_unknown"));
+            assertEquals("RESULT_UNKNOWN", rows.getString("status"));
+            assertEquals("AFTER", rows.getString("error_code"));
+            assertTrue(rows.next());
+            assertEquals(1, rows.getInt("result_unknown"));
+            assertEquals("RESULT_UNKNOWN", rows.getString("status"));
             assertEquals("AFTER", rows.getString("error_code"));
         }
     }

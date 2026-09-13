@@ -30,10 +30,14 @@ public interface ExecutionRepository
     void updateCurrentStage(Long executionId, String stage);
 
     void markSuccess(Long executionId, String businessKey, String requestPayload,
-            String responsePayload, Date endTime);
+            String responsePayload, boolean retainDedup, Date endTime);
 
     void markFailed(Long executionId, String errorCode, String errorMessage,
             boolean retryable, boolean resultUnknown, Date endTime);
+
+    void markSkipped(Long executionId, String businessKey, String reason, Date endTime);
+
+    void markResultUnknown(Long executionId, String errorCode, String errorMessage, Date endTime);
 
     int failStaleRunning(Date staleBefore, String beforeSendStage,
             String beforeSendCode, String afterSendCode);
