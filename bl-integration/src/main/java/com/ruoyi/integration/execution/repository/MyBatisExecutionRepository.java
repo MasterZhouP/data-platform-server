@@ -25,7 +25,7 @@ public class MyBatisExecutionRepository implements ExecutionRepository
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = ExecutionConflictException.class)
     public void insert(IntegrationExecution execution)
     {
         try
@@ -34,7 +34,9 @@ public class MyBatisExecutionRepository implements ExecutionRepository
         }
         catch (DuplicateKeyException ex)
         {
-            throw new ExecutionConflictException("存在相同业务或相同来源的执行记录", ex);
+            IntegrationExecution existing = execution.getDedupKey() == null ? null
+                    : executionMapper.selectExecutionByDedupKey(execution.getDedupKey());
+            throw new ExecutionConflictException("存在相同业务或相同来源的执行记录", existing, ex);
         }
     }
 
@@ -105,9 +107,9 @@ public class MyBatisExecutionRepository implements ExecutionRepository
     @Override
     @Transactional
     public void markSuccess(Long executionId, String businessKey, String requestPayload,
-            String responsePayload, Date endTime)
+            String responsePayload, boolean retainDedup, Date endTime)
     {
-        executionMapper.markSuccess(executionId, businessKey, requestPayload, responsePayload, endTime);
+        executionMapper.markSuccess(executionId, businessKey, requestPayload, responsePayload, retainDedup, endTime);
     }
 
     @Override
@@ -116,6 +118,20 @@ public class MyBatisExecutionRepository implements ExecutionRepository
             boolean retryable, boolean resultUnknown, Date endTime)
     {
         executionMapper.markFailed(executionId, errorCode, errorMessage, retryable, resultUnknown, endTime);
+    }
+
+    @Override
+    @Transactional
+    public void markSkipped(Long executionId, String businessKey, String reason, Date endTime)
+    {
+        executionMapper.markSkipped(executionId, businessKey, reason, endTime);
+    }
+
+    @Override
+    @Transactional
+    public void markResultUnknown(Long executionId, String errorCode, String errorMessage, Date endTime)
+    {
+        executionMapper.markResultUnknown(executionId, errorCode, errorMessage, endTime);
     }
 
     @Override

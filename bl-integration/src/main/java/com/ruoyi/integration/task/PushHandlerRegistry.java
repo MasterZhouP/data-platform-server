@@ -9,12 +9,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class PushHandlerRegistry
 {
-    private final Map<String, OaToU8PushHandler> handlers;
+    private final Map<String, IntegrationTaskHandler> handlers;
 
-    public PushHandlerRegistry(List<OaToU8PushHandler> handlerList)
+    public PushHandlerRegistry(List<IntegrationTaskHandler> handlerList)
     {
-        Map<String, OaToU8PushHandler> registered = new LinkedHashMap<>();
-        for (OaToU8PushHandler handler : handlerList)
+        Map<String, IntegrationTaskHandler> registered = new LinkedHashMap<>();
+        for (IntegrationTaskHandler handler : handlerList)
         {
             String taskCode = normalize(handler.taskCode());
             if (registered.putIfAbsent(taskCode, handler) != null)
@@ -25,9 +25,9 @@ public class PushHandlerRegistry
         this.handlers = Collections.unmodifiableMap(registered);
     }
 
-    public OaToU8PushHandler require(String taskCode)
+    public IntegrationTaskHandler require(String taskCode)
     {
-        OaToU8PushHandler handler = handlers.get(normalize(taskCode));
+        IntegrationTaskHandler handler = handlers.get(normalize(taskCode));
         if (handler == null)
         {
             throw new UnknownTaskException(taskCode);

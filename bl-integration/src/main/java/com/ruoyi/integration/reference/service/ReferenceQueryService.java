@@ -77,7 +77,7 @@ public class ReferenceQueryService {
             stage.setEndTime(ended);
             stage.setUpdateTime(ended);
             repository.updateStage(stage);
-            repository.markSuccess(execution.getExecutionId(), null, summary.toString(), result.toString(), ended);
+            repository.markSuccess(execution.getExecutionId(), null, summary.toString(), result.toString(), true, ended);
             return new QueryResult(data, executionId);
         } catch (RuntimeException failure) {
             ReferenceException error = failure instanceof ReferenceException reference ? reference

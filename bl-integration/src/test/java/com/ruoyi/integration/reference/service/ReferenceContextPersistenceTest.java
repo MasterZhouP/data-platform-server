@@ -26,6 +26,7 @@ class ReferenceContextPersistenceTest {
             s.execute("""
                 CREATE TABLE int_execution (execution_id BIGINT AUTO_INCREMENT PRIMARY KEY, task_code VARCHAR(100),
                 master_id VARCHAR(100) NOT NULL, form_id VARCHAR(100), summary_id VARCHAR(100), business_key VARCHAR(200),
+                operation VARCHAR(30), trigger_source VARCHAR(20), force_flag BOOLEAN,
                 status VARCHAR(20), stage VARCHAR(50), retryable BOOLEAN, result_unknown BOOLEAN, retry_count INT,
                 retry_of_execution_id BIGINT, dedup_key VARCHAR(255), trigger_payload CLOB, request_payload CLOB,
                 response_payload CLOB, error_code VARCHAR(100), error_message VARCHAR(2000), start_time TIMESTAMP,

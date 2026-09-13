@@ -145,6 +145,23 @@ xss:
 
 # 集成执行与外部数据源。外部连接默认关闭，凭据只从环境变量注入。
 integration:
+  oa:
+    base-url: ${INTEGRATION_OA_BASE_URL:http://221.215.114.30:8081}
+    username: ${INTEGRATION_OA_REST_USERNAME:rest}
+    password: ${INTEGRATION_OA_REST_PASSWORD:}
+    login-name: ${INTEGRATION_OA_LOGIN_NAME:bladmin}
+    connect-timeout-millis: ${INTEGRATION_OA_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-millis: ${INTEGRATION_OA_READ_TIMEOUT_MS:15000}
+  sync:
+    sales-outbound:
+      template-code: ${INTEGRATION_SALES_OUTBOUND_TEMPLATE:XSCKDCS}
+      main-table: ${INTEGRATION_SALES_OUTBOUND_MAIN_TABLE:formmain_0688}
+      detail-table: ${INTEGRATION_SALES_OUTBOUND_DETAIL_TABLE:formson_0689}
+      minimum-document-date: ${INTEGRATION_SALES_OUTBOUND_MIN_DATE:2023-09-21}
+      # 首次启用定时任务前必须明确设置，例如 2026-09-13T00:00:00。
+      initial-cursor: ${INTEGRATION_SALES_OUTBOUND_INITIAL_CURSOR:}
+      # 为覆盖晚提交事务，重叠扫描最近24小时；事件账本保证同一增量不会重复执行。
+      overlap-minutes: ${INTEGRATION_SALES_OUTBOUND_OVERLAP_MINUTES:1440}
   reference:
     api:
       # OA 插件与平台当前同包、同服务器部署，X-Integration-Key 鉴权暂时禁用。
@@ -167,18 +184,18 @@ integration:
       queue-capacity: 200
   datasource:
     oa:
-      enabled: true
-      url: j​​dbc:sqlserver://ae6qe7258136.vicp.fun:35799;databaseName=a8;encrypt=true;trustServerCertificate=true
-      username: sa
-      password: 123456Abc
+      enabled: ${INTEGRATION_OA_DB_ENABLED:false}
+      url: ${INTEGRATION_OA_DB_URL:}
+      username: ${INTEGRATION_OA_DB_USERNAME:}
+      password: ${INTEGRATION_OA_DB_PASSWORD:}
       read-only: true
       maximum-pool-size: 3
       connection-timeout: 5000
     u8:
-      enabled: true
-      url: jdbc:sqlserver://ae6qe7258136.vicp.fun:35799;databaseName=UFDATA_123_2023;encrypt=true;trustServerCertificate=true
-      username: sa
-      password: 123456Abc
+      enabled: ${INTEGRATION_U8_DB_ENABLED:false}
+      url: ${INTEGRATION_U8_DB_URL:}
+      username: ${INTEGRATION_U8_DB_USERNAME:}
+      password: ${INTEGRATION_U8_DB_PASSWORD:}
       read-only: true
       maximum-pool-size: 3
       connection-timeout: 5000

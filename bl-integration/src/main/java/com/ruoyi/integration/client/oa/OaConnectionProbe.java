@@ -2,12 +2,12 @@ package com.ruoyi.integration.client.oa;
 
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnBean(name = "oaJdbcTemplate")
+@ConditionalOnProperty(prefix = "integration.datasource.oa", name = "enabled", havingValue = "true")
 public class OaConnectionProbe
 {
     private final NamedParameterJdbcTemplate jdbcTemplate;

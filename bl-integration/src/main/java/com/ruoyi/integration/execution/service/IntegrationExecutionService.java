@@ -9,7 +9,7 @@ import com.ruoyi.integration.execution.domain.IntegrationExecution;
 import com.ruoyi.integration.execution.domain.IntegrationExecutionStage;
 import com.ruoyi.integration.execution.repository.ExecutionRepository;
 import com.ruoyi.integration.execution.support.SensitiveDataMasker;
-import com.ruoyi.integration.task.OaToU8PushHandler;
+import com.ruoyi.integration.task.IntegrationTaskHandler;
 import com.ruoyi.integration.task.PushHandlerRegistry;
 import com.ruoyi.integration.task.TriggerCommand;
 import org.springframework.context.ApplicationEventPublisher;
@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class IntegrationExecutionService
+public class IntegrationExecutionService implements ExecutionAcceptor
 {
     private final ExecutionRepository repository;
     private final PushHandlerRegistry handlerRegistry;
@@ -33,12 +33,13 @@ public class IntegrationExecutionService
         this.masker = masker;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = ExecutionConflictException.class)
+    @Override
     public AcceptanceResult accept(TriggerCommand command)
     {
         validate(command);
         TriggerCommand normalized = normalize(command);
-        OaToU8PushHandler handler = handlerRegistry.require(normalized.taskCode());
+        IntegrationTaskHandler handler = handlerRegistry.require(normalized.taskCode());
         IntegrationExecution execution = createExecution(normalized, handler.dedupKey(normalized));
         repository.insert(execution);
         repository.insertStage(receivedStage(execution.getExecutionId()));
@@ -65,8 +66,10 @@ public class IntegrationExecutionService
         }
 
         TriggerCommand command = new TriggerCommand(original.getTaskCode(), original.getMasterId(),
-                original.getFormId(), original.getSummaryId());
-        OaToU8PushHandler handler = handlerRegistry.require(original.getTaskCode());
+                original.getFormId(), original.getSummaryId(),
+                com.ruoyi.integration.task.TaskAction.valueOf(original.getOperation()),
+                com.ruoyi.integration.task.TriggerSource.RETRY, Boolean.TRUE.equals(original.getForce()));
+        IntegrationTaskHandler handler = handlerRegistry.require(original.getTaskCode());
         IntegrationExecution child = createExecution(command, handler.dedupKey(command));
         child.setBusinessKey(original.getBusinessKey());
         child.setRetryCount(valueOrZero(original.getRetryCount()) + 1);
@@ -116,6 +119,9 @@ public class IntegrationExecutionService
         execution.setMasterId(command.masterId().trim());
         execution.setFormId(trimToNull(command.formId()));
         execution.setSummaryId(trimToNull(command.summaryId()));
+        execution.setOperation(command.action().name());
+        execution.setTriggerSource(command.triggerSource().name());
+        execution.setForce(command.force());
         execution.setStatus(ExecutionStatus.PENDING.name());
         execution.setStage("RECEIVED");
         execution.setRetryable(false);
@@ -158,7 +164,8 @@ public class IntegrationExecutionService
     private TriggerCommand normalize(TriggerCommand command)
     {
         return new TriggerCommand(command.taskCode().trim(), command.masterId().trim(),
-                trimToNull(command.formId()), trimToNull(command.summaryId()));
+                trimToNull(command.formId()), trimToNull(command.summaryId()), command.action(),
+                command.triggerSource(), command.force());
     }
 
     private void decorateRetryDecision(IntegrationExecution execution)
@@ -174,13 +181,14 @@ public class IntegrationExecutionService
 
     private String retryBlockReason(IntegrationExecution execution)
     {
+        if (ExecutionStatus.RESULT_UNKNOWN.name().equals(execution.getStatus())
+                || Boolean.TRUE.equals(execution.getResultUnknown()))
+        {
+            return "外部处理结果未知，请先核对目标系统实际结果";
+        }
         if (!ExecutionStatus.FAILED.name().equals(execution.getStatus()))
         {
             return "只有失败记录可以重试";
-        }
-        if (Boolean.TRUE.equals(execution.getResultUnknown()))
-        {
-            return "外部处理结果未知，请先核对 U8 实际结果";
         }
         if (!Boolean.TRUE.equals(execution.getRetryable()))
         {

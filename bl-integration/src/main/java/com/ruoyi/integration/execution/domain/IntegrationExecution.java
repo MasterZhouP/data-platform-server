@@ -14,6 +14,9 @@ public class IntegrationExecution extends BaseEntity
     private String businessKey;
     private String formId;
     private String summaryId;
+    private String operation;
+    private String triggerSource;
+    private Boolean force;
     private String status;
     private String stage;
     private Boolean retryable;
@@ -40,6 +43,9 @@ public class IntegrationExecution extends BaseEntity
         value.businessKey = businessKey;
         value.formId = formId;
         value.summaryId = summaryId;
+        value.operation = operation;
+        value.triggerSource = triggerSource;
+        value.force = force;
         value.status = status;
         value.stage = stage;
         value.retryable = retryable;
@@ -74,6 +80,12 @@ public class IntegrationExecution extends BaseEntity
     public void setFormId(String formId) { this.formId = formId; }
     public String getSummaryId() { return summaryId; }
     public void setSummaryId(String summaryId) { this.summaryId = summaryId; }
+    public String getOperation() { return operation; }
+    public void setOperation(String operation) { this.operation = operation; }
+    public String getTriggerSource() { return triggerSource; }
+    public void setTriggerSource(String triggerSource) { this.triggerSource = triggerSource; }
+    public Boolean getForce() { return force; }
+    public void setForce(Boolean force) { this.force = force; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getStage() { return stage; }

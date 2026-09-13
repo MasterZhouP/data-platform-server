@@ -33,6 +33,8 @@ import com.ruoyi.integration.task.PushExecutionContext;
 import com.ruoyi.integration.task.PushFailureException;
 import com.ruoyi.integration.task.PushHandlerRegistry;
 import com.ruoyi.integration.task.PushResult;
+import com.ruoyi.integration.task.TaskAction;
+import com.ruoyi.integration.task.TriggerSource;
 import com.ruoyi.integration.task.TriggerCommand;
 
 class IntegrationExecutionFlowTest
@@ -72,6 +74,50 @@ class IntegrationExecutionFlowTest
         assertEquals("BK-v1", completed.getBusinessKey());
         assertEquals(1, handler.invocations.get());
         assertTrue(repository.findStages(accepted.executionId()).size() >= 2);
+    }
+
+    @Test
+    void preservesTaskActionSourceAndForceFlagForExecution()
+    {
+        TriggerCommand command = new TriggerCommand("TEST_PUSH", "M-101", null, null,
+                TaskAction.CANCEL_RECREATE, TriggerSource.MANUAL, true);
+
+        AcceptanceResult accepted = service.accept(command);
+        runner.run(accepted.executionId());
+
+        IntegrationExecution completed = repository.findById(accepted.executionId());
+        assertEquals("CANCEL_RECREATE", completed.getOperation());
+        assertEquals("MANUAL", completed.getTriggerSource());
+        assertTrue(completed.getForce());
+        assertEquals(TaskAction.CANCEL_RECREATE, handler.lastContext.action());
+        assertEquals(TriggerSource.MANUAL, handler.lastContext.triggerSource());
+        assertTrue(handler.lastContext.force());
+    }
+
+    @Test
+    void skippedHandlerResultUsesSkippedTerminalStatus()
+    {
+        handler.result = PushResult.skipped("M-102", "已有有效OA流程");
+        AcceptanceResult accepted = service.accept(new TriggerCommand("TEST_PUSH", "M-102", null, null));
+
+        runner.run(accepted.executionId());
+
+        IntegrationExecution completed = repository.findById(accepted.executionId());
+        assertEquals(ExecutionStatus.SKIPPED.name(), completed.getStatus());
+        assertEquals("已有有效OA流程", completed.getErrorMessage());
+    }
+
+    @Test
+    void repeatableTaskReleasesDedupKeyAfterSuccessfulExecution()
+    {
+        handler.retainDedupAfterSuccess = false;
+        AcceptanceResult first = service.accept(new TriggerCommand("TEST_PUSH", "M-103", null, null));
+        runner.run(first.executionId());
+
+        AcceptanceResult second = service.accept(new TriggerCommand("TEST_PUSH", "M-103", null, null,
+                TaskAction.CANCEL_RECREATE, TriggerSource.SCHEDULED, false));
+
+        assertNotEquals(first.executionId(), second.executionId());
     }
 
     @Test
@@ -121,8 +167,10 @@ class IntegrationExecutionFlowTest
         runner.run(accepted.executionId());
 
         IntegrationExecution failed = repository.findById(accepted.executionId());
+        assertEquals(ExecutionStatus.RESULT_UNKNOWN.name(), failed.getStatus());
         assertTrue(failed.getResultUnknown());
         assertFalse(failed.getRetryable());
+        assertTrue(service.findDetail(accepted.executionId()).getRetryBlockReason().contains("目标系统"));
         assertThrows(RetryRejectedException.class, () -> service.retry(accepted.executionId()));
     }
 
@@ -166,6 +214,9 @@ class IntegrationExecutionFlowTest
         private final AtomicInteger invocations = new AtomicInteger();
         private String sourceVersion = "v1";
         private PushFailureException failure;
+        private PushResult result;
+        private PushExecutionContext lastContext;
+        private boolean retainDedupAfterSuccess = true;
 
         @Override
         public String taskCode()
@@ -174,15 +225,26 @@ class IntegrationExecutionFlowTest
         }
 
         @Override
+        public boolean retainDedupAfterSuccess()
+        {
+            return retainDedupAfterSuccess;
+        }
+
+        @Override
         public PushResult execute(PushExecutionContext context, ExecutionStageRecorder recorder)
         {
             invocations.incrementAndGet();
+            lastContext = context;
             recorder.started("SOURCE_LOADING", "{\"masterId\":\"" + context.masterId() + "\"}");
             if (failure != null)
             {
                 throw failure;
             }
             recorder.succeeded("SOURCE_LOADING", "{\"version\":\"" + sourceVersion + "\"}");
+            if (result != null)
+            {
+                return result;
+            }
             return PushResult.success("BK-" + sourceVersion,
                     "{\"version\":\"" + sourceVersion + "\",\"token\":\"do-not-store\"}",
                     "{\"success\":true}");
@@ -295,7 +357,7 @@ class IntegrationExecutionFlowTest
 
         @Override
         public synchronized void markSuccess(Long executionId, String businessKey, String requestPayload,
-                String responsePayload, Date endTime)
+                String responsePayload, boolean retainDedup, Date endTime)
         {
             IntegrationExecution value = executions.get(executionId);
             value.setStatus(ExecutionStatus.SUCCESS.name());
@@ -306,6 +368,10 @@ class IntegrationExecutionFlowTest
             }
             value.setRequestPayload(requestPayload);
             value.setResponsePayload(responsePayload);
+            if (!retainDedup)
+            {
+                value.setDedupKey(null);
+            }
             value.setEndTime(endTime);
         }
 
@@ -324,6 +390,31 @@ class IntegrationExecutionFlowTest
             {
                 value.setDedupKey(null);
             }
+        }
+
+        @Override
+        public synchronized void markSkipped(Long executionId, String businessKey, String reason, Date endTime)
+        {
+            IntegrationExecution value = executions.get(executionId);
+            value.setStatus(ExecutionStatus.SKIPPED.name());
+            value.setStage("COMPLETED");
+            value.setBusinessKey(businessKey);
+            value.setErrorCode("SKIPPED");
+            value.setErrorMessage(reason);
+            value.setDedupKey(null);
+            value.setEndTime(endTime);
+        }
+
+        @Override
+        public synchronized void markResultUnknown(Long executionId, String errorCode, String errorMessage, Date endTime)
+        {
+            IntegrationExecution value = executions.get(executionId);
+            value.setStatus(ExecutionStatus.RESULT_UNKNOWN.name());
+            value.setErrorCode(errorCode);
+            value.setErrorMessage(errorMessage);
+            value.setRetryable(false);
+            value.setResultUnknown(true);
+            value.setEndTime(endTime);
         }
 
         @Override

@@ -9,6 +9,9 @@
         <result property="businessKey" column="business_key" />
         <result property="formId" column="form_id" />
         <result property="summaryId" column="summary_id" />
+        <result property="operation" column="operation" />
+        <result property="triggerSource" column="trigger_source" />
+        <result property="force" column="force_flag" />
         <result property="status" column="status" />
         <result property="stage" column="stage" />
         <result property="retryable" column="retryable" />
@@ -28,14 +31,14 @@
     </resultMap>
 
     <sql id="executionColumns">
-        execution_id, task_code, master_id, business_key, form_id, summary_id,
+        execution_id, task_code, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag,
         status, stage, retryable, result_unknown, retry_count, retry_of_execution_id,
         dedup_key, trigger_payload, request_payload, response_payload, error_code,
         error_message, start_time, end_time, create_time, update_time
     </sql>
 
     <sql id="executionListColumns">
-        execution_id, task_code, master_id, business_key, form_id, summary_id,
+        execution_id, task_code, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag,
         status, stage, retryable, result_unknown, retry_count, retry_of_execution_id,
         error_code, error_message, start_time, end_time, create_time, update_time
     </sql>
@@ -43,12 +46,12 @@
     <insert id="insertExecution" parameterType="com.ruoyi.integration.execution.domain.IntegrationExecution"
             useGeneratedKeys="true" keyProperty="executionId">
         INSERT INTO int_execution (
-            task_code, master_id, business_key, form_id, summary_id, status, stage,
+            task_code, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag, status, stage,
             retryable, result_unknown, retry_count, retry_of_execution_id, dedup_key,
             trigger_payload, request_payload, response_payload, error_code, error_message,
             start_time, end_time, create_time, update_time
         ) VALUES (
-            #{taskCode}, #{masterId}, #{businessKey}, #{formId}, #{summaryId}, #{status}, #{stage},
+            #{taskCode}, #{masterId}, #{businessKey}, #{formId}, #{summaryId}, #{operation}, #{triggerSource}, #{force}, #{status}, #{stage},
             #{retryable}, #{resultUnknown}, #{retryCount}, #{retryOfExecutionId}, #{dedupKey},
             #{triggerPayload}, #{requestPayload}, #{responsePayload}, #{errorCode}, #{errorMessage},
             #{startTime}, #{endTime}, #{createTime}, #{updateTime}
@@ -66,6 +69,13 @@
         FROM int_execution
         WHERE execution_id = #{executionId}
         FOR UPDATE
+    </select>
+
+    <select id="selectExecutionByDedupKey" resultMap="ExecutionResult">
+        SELECT <include refid="executionColumns" />
+        FROM int_execution
+        WHERE dedup_key = #{dedupKey}
+        LIMIT 1
     </select>
 
     <select id="selectExecutionList" resultMap="ExecutionResult">
@@ -115,6 +125,7 @@
         SET status = 'SUCCESS', stage = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 'REFERENCE_COMPLETED' ELSE 'COMPLETED' END, retryable = 0, result_unknown = 0,
             business_key = COALESCE(business_key, #{businessKey}),
             request_payload = #{requestPayload}, response_payload = #{responsePayload},
+            dedup_key = CASE WHEN #{retainDedup} THEN dedup_key ELSE NULL END,
             error_code = NULL, error_message = NULL, end_time = #{endTime}, update_time = #{endTime}
         WHERE execution_id = #{executionId} AND status = 'RUNNING'
     </update>
@@ -123,22 +134,37 @@
         UPDATE int_execution
         SET status = 'FAILED', retryable = #{retryable}, result_unknown = #{resultUnknown},
             error_code = #{errorCode}, error_message = #{errorMessage}, end_time = #{endTime},
-            update_time = #{endTime}
-            <if test="retryable and !resultUnknown">, dedup_key = NULL</if>
+            update_time = #{endTime}, dedup_key = NULL
+        WHERE execution_id = #{executionId} AND status = 'RUNNING'
+    </update>
+
+    <update id="markSkipped">
+        UPDATE int_execution
+        SET status = 'SKIPPED', stage = 'COMPLETED', retryable = 0, result_unknown = 0,
+            business_key = COALESCE(business_key, #{businessKey}), error_code = 'SKIPPED',
+            error_message = #{reason}, dedup_key = NULL, end_time = #{endTime}, update_time = #{endTime}
+        WHERE execution_id = #{executionId} AND status = 'RUNNING'
+    </update>
+
+    <update id="markResultUnknown">
+        UPDATE int_execution
+        SET status = 'RESULT_UNKNOWN', retryable = 0, result_unknown = 1,
+            error_code = #{errorCode}, error_message = #{errorMessage},
+            end_time = #{endTime}, update_time = #{endTime}
         WHERE execution_id = #{executionId} AND status = 'RUNNING'
     </update>
 
     <update id="failStaleRunning">
         UPDATE int_execution
-        SET status = 'FAILED',
-            retryable = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 0 WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN 0 ELSE 1 END,
-            result_unknown = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN 1 ELSE 0 END,
-            dedup_key = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN dedup_key ELSE NULL END,
-            error_code = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 'PROCESS_INTERRUPTED' WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED') THEN #{afterSendCode} ELSE #{beforeSendCode} END,
+        SET status = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'START_OA_PROCESS', 'CANCEL_OLD', 'COMPLETED') THEN 'RESULT_UNKNOWN' ELSE 'FAILED' END,
+            retryable = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 0 WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'START_OA_PROCESS', 'CANCEL_OLD', 'COMPLETED') THEN 0 ELSE 1 END,
+            result_unknown = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'START_OA_PROCESS', 'CANCEL_OLD', 'COMPLETED') THEN 1 ELSE 0 END,
+            dedup_key = CASE WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'START_OA_PROCESS', 'CANCEL_OLD', 'COMPLETED') THEN dedup_key ELSE NULL END,
+            error_code = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN 'PROCESS_INTERRUPTED' WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'START_OA_PROCESS', 'CANCEL_OLD', 'COMPLETED') THEN #{afterSendCode} ELSE #{beforeSendCode} END,
             error_message = CASE WHEN LEFT(stage, 10) = 'REFERENCE_' THEN '进程中断，参照查询未完成，请重新发起查询'
-                WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'COMPLETED')
-                THEN '进程中断，外部处理结果未知，请先核对 U8 实际结果'
-                ELSE '进程中断，任务未进入 U8 发送阶段，可由管理员重试' END,
+                WHEN stage IN ('U8_REQUEST_SENDING', 'U8_REQUEST_SENT', 'U8_CONFIRMED', 'OA_WRITTEN_BACK', 'START_OA_PROCESS', 'CANCEL_OLD', 'COMPLETED')
+                THEN '进程中断，外部处理结果未知，请先核对目标系统实际结果'
+                ELSE '进程中断，任务未进入外部发送阶段，可由管理员重试' END,
             end_time = NOW(), update_time = NOW()
         WHERE status = 'RUNNING' AND start_time &lt; #{staleBefore}
     </update>
