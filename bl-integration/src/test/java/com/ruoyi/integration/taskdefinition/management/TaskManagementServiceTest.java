@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +16,7 @@ import com.ruoyi.integration.taskdefinition.TaskType;
 import com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskMapper;
 import com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskRow;
 import com.ruoyi.integration.taskdefinition.mapper.TaskRevisionRow;
+import com.ruoyi.integration.taskdefinition.mapper.TaskRevisionWriteRow;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -66,6 +68,24 @@ class TaskManagementServiceTest
                 () -> service().publish("OA_EXPENSE_VOUCHER", 5L));
     }
 
+    @Test
+    void createsReferenceDraftInTheSameVersionedTaskCatalog()
+    {
+        when(mapper.nextRevisionNo("U8_MATERIAL_REFERENCE")).thenReturn(1);
+        when(mapper.updateTaskDraft(eq("U8_MATERIAL_REFERENCE"), eq("物料参照"), eq(true), any(), eq(0L)))
+                .thenReturn(1);
+
+        IntegrationTaskDefinition created = service().create("U8_MATERIAL_REFERENCE",
+                new TaskDraftCommand("物料参照", TaskType.REFERENCE_QUERY, true, null, referenceConfig(), "迁移参照配置"));
+
+        assertEquals(TaskType.REFERENCE_QUERY, created.taskType());
+        assertEquals(1L, created.configVersion());
+        verify(mapper).insertGeneratedRevision(org.mockito.ArgumentMatchers.argThat((TaskRevisionWriteRow revision) ->
+                revision.getConfigJson().contains("datasourceKey")
+                        && revision.getDependencyRevisionsJson().contains("datasource:u8")
+                        && !revision.getDependencyRevisionsJson().contains("u8Gateway")));
+    }
+
     private TaskManagementService service()
     {
         return new TaskManagementService(mapper, json,
@@ -87,6 +107,53 @@ class TaskManagementServiceTest
         u8.putArray("outputs");
         root.putArray("resultQueries");
         return root;
+    }
+
+    private ObjectNode referenceConfig()
+    {
+        ObjectNode config = json.createObjectNode();
+        config.put("datasourceKey", "u8");
+        config.put("sqlText", "SELECT cInvCode AS code FROM Inventory");
+        config.set("metadata", referenceMetadata());
+        return config;
+    }
+
+    private ObjectNode referenceMetadata()
+    {
+        ObjectNode metadata = json.createObjectNode();
+        metadata.put("taskCode", "U8_MATERIAL_REFERENCE");
+        metadata.put("taskName", "物料参照");
+        metadata.put("taskType", "REFERENCE");
+        metadata.put("executionMode", "SYNC_QUERY");
+        metadata.put("metadataVersion", "migration-1");
+        ObjectNode resultSet = metadata.putArray("resultSets").addObject();
+        resultSet.put("resultSetCode", "material");
+        resultSet.put("resultSetName", "物料");
+        resultSet.put("selectionMode", "SINGLE");
+        ObjectNode field = resultSet.putArray("fields").addObject();
+        field.put("name", "code");
+        field.put("label", "编码");
+        field.put("order", 1);
+        field.put("dataType", "STRING");
+        field.put("nullable", false);
+        field.putArray("filterOperators").add("eq");
+        field.put("sortable", true);
+        resultSet.putArray("parameters");
+        ObjectNode defaults = resultSet.putObject("defaults");
+        defaults.putArray("displayFields").add("code");
+        defaults.putArray("filterFields").add("code");
+        ObjectNode sort = defaults.putArray("sort").addObject();
+        sort.put("field", "code");
+        sort.put("direction", "ASC");
+        defaults.put("pageSize", 20);
+        ObjectNode limits = resultSet.putObject("limits");
+        limits.put("maxPageSize", 200);
+        limits.put("maxFilterConditions", 20);
+        limits.put("maxFilterDepth", 3);
+        limits.put("maxSortFields", 5);
+        limits.put("maxInValues", 100);
+        limits.put("queryTimeoutMs", 10000);
+        return metadata;
     }
 
     private IntegrationTaskRow task(long version, Long draftRevisionId)

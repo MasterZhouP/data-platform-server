@@ -17,6 +17,7 @@ import com.ruoyi.integration.task.TriggerCommand;
 import com.ruoyi.integration.taskdefinition.PublishedTaskRevision;
 import com.ruoyi.integration.taskdefinition.TaskDefinitionNotFoundException;
 import com.ruoyi.integration.taskdefinition.TaskDefinitionResolver;
+import com.ruoyi.integration.taskdefinition.TaskType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -207,6 +208,11 @@ public class IntegrationExecutionService implements ExecutionAcceptor
 
     private void requireExecutor(PublishedTaskRevision revision)
     {
+        // 参照查询是同步只读接口，不能因进入 OA 异步受理入口而被误当作需要推送 U8 的任务。
+        if (revision.taskType() == TaskType.REFERENCE_QUERY)
+        {
+            throw new IllegalArgumentException("参照任务只能通过参照查询接口执行");
+        }
         if (executorRegistry == null)
         {
             throw new IllegalStateException("配置型集成任务执行器尚未初始化");

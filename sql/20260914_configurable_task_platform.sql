@@ -1,5 +1,5 @@
 -- 可配置任务平台：任务身份与不可变修订。
--- 本脚本只新增对象，可重复执行；不修改现有参照、定时同步或执行记录数据。
+-- 本脚本可重复执行：仅补充执行快照和任务目录，并将已有可运行参照任务复制为首个不可变修订。
 
 -- 执行快照与后处理检查点。沿用旧迁移的 information_schema 守卫，兼容 MySQL 5.7/8.0 并支持重复执行。
 SET @int_execution_task_revision_ddl := IF(
@@ -158,6 +158,49 @@ SET @int_reference_material_seed := IF(
 PREPARE int_reference_material_seed_stmt FROM @int_reference_material_seed;
 EXECUTE int_reference_material_seed_stmt;
 DEALLOCATE PREPARE int_reference_material_seed_stmt;
+
+-- 将存量参照任务一次性迁入统一目录。迁移后 int_reference_task 仅作为旧版本升级来源，
+-- 同步参照运行时始终读取 int_integration_task 的 active_revision_id，避免形成两套可编辑配置。
+SET @int_reference_catalog_task_seed := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task' AND COLUMN_NAME = 'sql_text')
+    AND EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task' AND COLUMN_NAME = 'metadata_json'),
+    'INSERT INTO int_integration_task (task_code, task_name, task_type, enabled, active_revision_id, draft_revision_id, config_version, create_time, update_time)
+     SELECT r.task_code, r.task_name, ''REFERENCE_QUERY'', r.enabled, NULL, NULL, 0, NOW(), NOW()
+     FROM int_reference_task r
+     WHERE r.sql_text IS NOT NULL AND TRIM(r.sql_text) <> ''''
+       AND JSON_VALID(r.metadata_json) = 1 AND JSON_TYPE(JSON_EXTRACT(r.metadata_json, ''$'')) = ''OBJECT''
+       AND NOT EXISTS (SELECT 1 FROM int_integration_task t WHERE t.task_code = r.task_code)',
+    'SELECT 1'
+);
+PREPARE int_reference_catalog_task_seed_stmt FROM @int_reference_catalog_task_seed;
+EXECUTE int_reference_catalog_task_seed_stmt;
+DEALLOCATE PREPARE int_reference_catalog_task_seed_stmt;
+
+SET @int_reference_catalog_revision_seed := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task' AND COLUMN_NAME = 'sql_text')
+    AND EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task' AND COLUMN_NAME = 'metadata_json'),
+    'INSERT INTO int_integration_task_revision (task_code, revision_no, status, config_json, config_checksum, dependency_revisions_json, validation_json, change_note, create_time, update_time)
+     SELECT r.task_code, 1, ''PUBLISHED'',
+       JSON_OBJECT(''datasourceKey'', r.datasource_key, ''sqlText'', r.sql_text, ''metadata'', JSON_EXTRACT(r.metadata_json, ''$'')),
+       SHA2(JSON_OBJECT(''datasourceKey'', r.datasource_key, ''sqlText'', r.sql_text, ''metadata'', JSON_EXTRACT(r.metadata_json, ''$'')), 256),
+       JSON_OBJECT(CONCAT(''datasource:'', r.datasource_key), ''registered-readonly''),
+       JSON_OBJECT(''valid'', TRUE, ''validatedBy'', ''migration''), ''参照任务统一目录迁移'', NOW(), NOW()
+     FROM int_reference_task r
+     INNER JOIN int_integration_task t ON t.task_code = r.task_code AND t.task_type = ''REFERENCE_QUERY''
+     WHERE r.sql_text IS NOT NULL AND TRIM(r.sql_text) <> ''''
+       AND JSON_VALID(r.metadata_json) = 1 AND JSON_TYPE(JSON_EXTRACT(r.metadata_json, ''$'')) = ''OBJECT''
+       AND NOT EXISTS (SELECT 1 FROM int_integration_task_revision v WHERE v.task_code = r.task_code)',
+    'SELECT 1'
+);
+PREPARE int_reference_catalog_revision_seed_stmt FROM @int_reference_catalog_revision_seed;
+EXECUTE int_reference_catalog_revision_seed_stmt;
+DEALLOCATE PREPARE int_reference_catalog_revision_seed_stmt;
+
+UPDATE int_integration_task t
+INNER JOIN int_integration_task_revision r
+    ON r.task_code = t.task_code AND r.revision_no = 1 AND r.status = 'PUBLISHED'
+SET t.active_revision_id = r.revision_id, t.draft_revision_id = NULL, t.config_version = 1, t.update_time = NOW()
+WHERE t.task_type = 'REFERENCE_QUERY' AND t.active_revision_id IS NULL;
 
 -- 任务中心是控制面唯一入口：菜单只授予受控配置权限，不暴露脚本、任意外部地址或写库能力。
 SET @integration_task_root := (

@@ -10,6 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-14-configurable-oa-u8-task-design.md`
 
+## Implementation Status (2026-09-15)
+
+- Completed: common task/revision catalogue, fixed OA→U8 executor, shared U8 gateway, read-only SQL/template services, execution checkpoints and safe post-processing retry, task management APIs and typed OA→U8 workbench.
+- Completed in this follow-up: synchronous reference tasks now use the same published task revision as their sole runtime configuration source. The legacy reference table and its mapper are migration-only concerns; the reference menu redirects to the task-centre reference filter while preserving its dedicated SQL/field editor.
+- Retained by design: U8→OA sales-outbound remains code-managed. It is not converted into a page-configured workflow or arbitrary script engine in this release.
+
 ## Global Constraints
 
 - OA plugins keep calling one platform endpoint: `POST /integration/openapi/v1/executions`; individual tasks do not expose independent OA controllers.

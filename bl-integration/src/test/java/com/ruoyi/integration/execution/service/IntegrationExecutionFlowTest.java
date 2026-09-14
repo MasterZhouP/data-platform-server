@@ -231,6 +231,23 @@ class IntegrationExecutionFlowTest
     }
 
     @Test
+    void referenceTaskCannotEnterTheAsynchronousOaToU8ExecutionPipeline()
+    {
+        TaskDefinitionResolver definitions = mock(TaskDefinitionResolver.class);
+        PublishedTaskRevision reference = new PublishedTaskRevision("U8_MATERIAL_REFERENCE", 19L, "sha256-reference",
+                TaskType.REFERENCE_QUERY, new ObjectMapper().createObjectNode(), Map.of("datasource:u8", "registered-readonly"));
+        when(definitions.resolvePublished("U8_MATERIAL_REFERENCE")).thenReturn(reference);
+        SensitiveDataMasker masker = new SensitiveDataMasker(2000);
+        service = new IntegrationExecutionService(repository, new PushHandlerRegistry(List.of(handler)),
+                new TaskExecutorRegistry(List.of()), definitions, publisher, masker);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.accept(new TriggerCommand("U8_MATERIAL_REFERENCE", "M-490", null, null)));
+
+        assertTrue(error.getMessage().contains("参照"));
+    }
+
+    @Test
     void requiredPostProcessPendingMarksTheConfiguredExecutionPartiallySuccessful()
     {
         TaskDefinitionResolver definitions = mock(TaskDefinitionResolver.class);

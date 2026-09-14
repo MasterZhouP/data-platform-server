@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ruoyi.integration.oatou8.config.OaToU8TaskConfig;
 import com.ruoyi.integration.oatou8.config.ResultQueryStep;
 import com.ruoyi.integration.oatou8.config.TaskConfigValidator;
+import com.ruoyi.integration.reference.catalog.ReferenceTaskConfigValidator;
+import com.ruoyi.integration.reference.model.ReferenceTask;
 import com.ruoyi.integration.taskdefinition.IntegrationTaskDefinition;
 import com.ruoyi.integration.taskdefinition.RevisionStatus;
 import com.ruoyi.integration.taskdefinition.TaskDefinitionNotFoundException;
@@ -19,6 +21,7 @@ import com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskMapper;
 import com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskRow;
 import com.ruoyi.integration.taskdefinition.mapper.TaskRevisionRow;
 import com.ruoyi.integration.taskdefinition.mapper.TaskRevisionWriteRow;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,13 +35,22 @@ public class TaskManagementService
     private final IntegrationTaskMapper mapper;
     private final ObjectMapper json;
     private final TaskConfigValidator oaToU8Validator;
+    private final ReferenceTaskConfigValidator referenceValidator;
 
     public TaskManagementService(IntegrationTaskMapper mapper, ObjectMapper json,
             TaskConfigValidator oaToU8Validator)
     {
+        this(mapper, json, oaToU8Validator, new ReferenceTaskConfigValidator());
+    }
+
+    @Autowired
+    public TaskManagementService(IntegrationTaskMapper mapper, ObjectMapper json,
+            TaskConfigValidator oaToU8Validator, ReferenceTaskConfigValidator referenceValidator)
+    {
         this.mapper = mapper;
         this.json = json;
         this.oaToU8Validator = oaToU8Validator;
+        this.referenceValidator = referenceValidator;
     }
 
     @Transactional
@@ -48,7 +60,7 @@ public class TaskManagementService
         {
             throw new IllegalArgumentException("任务编码已存在: " + taskCode);
         }
-        PreparedDraft prepared = prepare(command);
+        PreparedDraft prepared = prepare(taskCode, command);
         // 先建立稳定任务身份，再绑定数据库生成的第一份草稿，避免把版本号交给浏览器控制。
         mapper.insertTask(new IntegrationTaskRow(taskCode, command.taskName(), command.taskType().name(),
                 command.enabled(), null, null, 0L));
@@ -68,7 +80,7 @@ public class TaskManagementService
         IntegrationTaskRow task = requiredTask(taskCode);
         requireExpectedVersion(taskCode, task, command.configVersion());
         requireMatchingType(task, command.taskType());
-        PreparedDraft prepared = prepare(command);
+        PreparedDraft prepared = prepare(taskCode, command);
         Long draftRevisionId = task.draftRevisionId();
         if (draftRevisionId == null)
         {
@@ -107,7 +119,7 @@ public class TaskManagementService
         TaskRevisionRow draft = requiredRevision(task.draftRevisionId());
         TaskDraftCommand command = new TaskDraftCommand(task.taskName(), TaskType.valueOf(task.taskType()), task.enabled(),
                 task.configVersion(), readConfig(draft), null);
-        PreparedDraft prepared = prepare(command);
+        PreparedDraft prepared = prepare(taskCode, command);
         if (mapper.markRevisionValidated(task.draftRevisionId(), validationJson(prepared)) != 1
                 || mapper.advanceConfigVersion(taskCode, task.configVersion()) != 1)
         {
@@ -181,16 +193,33 @@ public class TaskManagementService
         return readConfig(requiredRevision(task.draftRevisionId())).deepCopy();
     }
 
-    private PreparedDraft prepare(TaskDraftCommand command)
+    private PreparedDraft prepare(String taskCode, TaskDraftCommand command)
     {
         if (command == null || command.config() == null || command.taskName() == null || command.taskName().isBlank()
-                || command.taskName().length() > 100 || command.taskType() != TaskType.OA_TO_U8)
+                || command.taskName().length() > 100 || command.taskType() == null)
         {
-            throw new IllegalArgumentException("仅支持保存名称合规的 OA_TO_U8 任务草稿");
+            throw new IllegalArgumentException("任务草稿的名称、类型或配置不合规");
         }
-        OaToU8TaskConfig config = oaToU8Validator.parseAndValidate(command.config());
-        return new PreparedDraft(config, CanonicalJsonChecksum.canonicalize(command.config(), json),
-                CanonicalJsonChecksum.sha256(command.config(), json), dependencies(config));
+        if (command.taskType() == TaskType.OA_TO_U8)
+        {
+            // 发送任务和参照任务共用版本账本，但各自只接受对应的固定配置合同。
+            OaToU8TaskConfig config = oaToU8Validator.parseAndValidate(command.config());
+            return prepared(command.config(), dependencies(config));
+        }
+        if (command.taskType() == TaskType.REFERENCE_QUERY)
+        {
+            // 同步参照只登记 SQL 与字段元数据，不能夹带 U8 网关参数或异步推送步骤。
+            ReferenceTask config = referenceValidator.parseAndValidate(taskCode, command.taskName(), command.enabled(),
+                    command.config());
+            return prepared(command.config(), dependencies(config));
+        }
+        throw new IllegalArgumentException("暂不支持页面配置 " + command.taskType() + " 类型任务");
+    }
+
+    private PreparedDraft prepared(JsonNode config, Map<String, String> dependencies)
+    {
+        return new PreparedDraft(CanonicalJsonChecksum.canonicalize(config, json),
+                CanonicalJsonChecksum.sha256(config, json), dependencies);
     }
 
     private TaskRevisionWriteRow newDraft(String taskCode, Integer revisionNo, PreparedDraft prepared, String changeNote)
@@ -217,6 +246,12 @@ public class TaskManagementService
         // 任务只引用共享网关标识；账户、token、tradeId 和连接密钥均不进入版本数据。
         result.put("u8Gateway", "shared");
         return Map.copyOf(result);
+    }
+
+    private Map<String, String> dependencies(ReferenceTask config)
+    {
+        // 参照链路只依赖已登记的只读数据源，不借用 U8 网关、token 或任何写库权限。
+        return Map.of("datasource:" + config.datasourceKey(), "registered-readonly");
     }
 
     private String validationJson(PreparedDraft prepared)
@@ -299,6 +334,5 @@ public class TaskManagementService
         catch (Exception ex) { throw new IllegalStateException("任务修订配置无法写入", ex); }
     }
 
-    private record PreparedDraft(OaToU8TaskConfig typedConfig, JsonNode config, String checksum,
-            Map<String, String> dependencies) { }
+    private record PreparedDraft(JsonNode config, String checksum, Map<String, String> dependencies) { }
 }
