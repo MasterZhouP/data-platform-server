@@ -11,7 +11,12 @@ import com.ruoyi.integration.execution.repository.ExecutionRepository;
 import com.ruoyi.integration.execution.support.SensitiveDataMasker;
 import com.ruoyi.integration.task.IntegrationTaskHandler;
 import com.ruoyi.integration.task.PushHandlerRegistry;
+import com.ruoyi.integration.task.TaskExecutorRegistry;
 import com.ruoyi.integration.task.TriggerCommand;
+import com.ruoyi.integration.taskdefinition.PublishedTaskRevision;
+import com.ruoyi.integration.taskdefinition.TaskDefinitionNotFoundException;
+import com.ruoyi.integration.taskdefinition.TaskDefinitionResolver;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,16 +32,29 @@ public class IntegrationExecutionService implements ExecutionAcceptor
 {
     private final ExecutionRepository repository;
     private final PushHandlerRegistry handlerRegistry;
+    private final TaskExecutorRegistry executorRegistry;
+    private final TaskDefinitionResolver taskDefinitionResolver;
     private final ApplicationEventPublisher eventPublisher;
     private final SensitiveDataMasker masker;
 
+    @Autowired
     public IntegrationExecutionService(ExecutionRepository repository, PushHandlerRegistry handlerRegistry,
+            TaskExecutorRegistry executorRegistry, TaskDefinitionResolver taskDefinitionResolver,
             ApplicationEventPublisher eventPublisher, SensitiveDataMasker masker)
     {
         this.repository = repository;
         this.handlerRegistry = handlerRegistry;
+        this.executorRegistry = executorRegistry;
+        this.taskDefinitionResolver = taskDefinitionResolver;
         this.eventPublisher = eventPublisher;
         this.masker = masker;
+    }
+
+    /** 保留旧构造器供既有代码型任务测试和兼容调用使用；正式容器始终注入完整的配置型路由依赖。 */
+    public IntegrationExecutionService(ExecutionRepository repository, PushHandlerRegistry handlerRegistry,
+            ApplicationEventPublisher eventPublisher, SensitiveDataMasker masker)
+    {
+        this(repository, handlerRegistry, null, null, eventPublisher, masker);
     }
 
     @Transactional(noRollbackFor = ExecutionConflictException.class)
@@ -45,8 +63,21 @@ public class IntegrationExecutionService implements ExecutionAcceptor
     {
         validate(command);
         TriggerCommand normalized = normalize(command);
-        IntegrationTaskHandler handler = handlerRegistry.require(normalized.taskCode());
-        IntegrationExecution execution = createExecution(normalized, handler.dedupKey(normalized));
+        PublishedTaskRevision published = resolvePublished(normalized.taskCode());
+        IntegrationExecution execution;
+        if (published != null)
+        {
+            // 受理时固定修订与依赖快照，后续发布、停用都不会改变这一笔 OA 单据的执行合同。
+            requireExecutor(published);
+            execution = createExecution(normalized, published.dedupKey(normalized));
+            pinRevision(execution, published);
+        }
+        else
+        {
+            // 未纳入配置目录的既有 U8→OA 任务继续使用原有 Handler，避免本次平台升级破坏存量链路。
+            IntegrationTaskHandler handler = handlerRegistry.require(normalized.taskCode());
+            execution = createExecution(normalized, handler.dedupKey(normalized));
+        }
         repository.insert(execution);
         repository.insertStage(receivedStage(execution.getExecutionId()));
         eventPublisher.publishEvent(new ExecutionAcceptedEvent(execution.getExecutionId()));
@@ -75,8 +106,7 @@ public class IntegrationExecutionService implements ExecutionAcceptor
                 original.getFormId(), original.getSummaryId(),
                 com.ruoyi.integration.task.TaskAction.valueOf(original.getOperation()),
                 com.ruoyi.integration.task.TriggerSource.RETRY, Boolean.TRUE.equals(original.getForce()));
-        IntegrationTaskHandler handler = handlerRegistry.require(original.getTaskCode());
-        IntegrationExecution child = createExecution(command, handler.dedupKey(command));
+        IntegrationExecution child = createExecution(command, dedupKeyForRetry(original, command));
         child.setBusinessKey(original.getBusinessKey());
         child.setRetryCount(valueOrZero(original.getRetryCount()) + 1);
         child.setRetryOfExecutionId(original.getExecutionId());
@@ -146,6 +176,59 @@ public class IntegrationExecutionService implements ExecutionAcceptor
         execution.setCreateTime(new Date());
         execution.setUpdateTime(new Date());
         return execution;
+    }
+
+    private PublishedTaskRevision resolvePublished(String taskCode)
+    {
+        if (taskDefinitionResolver == null)
+        {
+            return null;
+        }
+        try
+        {
+            return taskDefinitionResolver.resolvePublished(taskCode);
+        }
+        catch (TaskDefinitionNotFoundException ex)
+        {
+            // 目录中不存在时才回退到代码型 Handler；已停用任务会由解析器直接阻断，不会意外执行旧代码。
+            if (taskDefinitionResolver.isCatalogTask(taskCode))
+            {
+                throw ex;
+            }
+            return null;
+        }
+    }
+
+    private void requireExecutor(PublishedTaskRevision revision)
+    {
+        if (executorRegistry == null)
+        {
+            throw new IllegalStateException("配置型集成任务执行器尚未初始化");
+        }
+        executorRegistry.require(revision.taskType());
+    }
+
+    private void pinRevision(IntegrationExecution execution, PublishedTaskRevision revision)
+    {
+        execution.setTaskRevisionId(revision.revisionId());
+        execution.setTaskChecksum(revision.checksum());
+        execution.setDependencySnapshot(masker.mask(JSON.toJSONString(revision.dependencyRevisions())));
+    }
+
+    private String dedupKeyForRetry(IntegrationExecution original, TriggerCommand command)
+    {
+        if (original.getTaskRevisionId() == null)
+        {
+            return handlerRegistry.require(original.getTaskCode()).dedupKey(command);
+        }
+        if (taskDefinitionResolver == null)
+        {
+            throw new IllegalStateException("配置型集成任务修订解析器尚未初始化");
+        }
+        PublishedTaskRevision pinned = taskDefinitionResolver.resolvePinned(original.getTaskCode(),
+                original.getTaskRevisionId(), original.getTaskChecksum());
+        requireExecutor(pinned);
+        return pinned.dedupKey(command);
     }
 
     private IntegrationExecutionStage receivedStage(Long executionId)

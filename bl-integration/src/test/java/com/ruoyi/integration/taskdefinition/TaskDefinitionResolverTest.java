@@ -1,7 +1,9 @@
 package com.ruoyi.integration.taskdefinition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -41,6 +43,32 @@ class TaskDefinitionResolverTest
         assertThrows(TaskDefinitionNotFoundException.class, () -> resolver.resolvePublished("oa_case"));
     }
 
+    @Test
+    void resolvesThePinnedRevisionAfterTheTaskIsDisabledOrTheRevisionIsArchived() throws Exception
+    {
+        InMemoryRepository repository = new InMemoryRepository();
+        repository.add("OA_EXPENSE_VOUCHER", true, TaskType.OA_TO_U8, 18L, "sha256-a");
+        repository.disable("OA_EXPENSE_VOUCHER");
+        repository.archiveRevision(18L);
+
+        PublishedTaskRevision resolved = new TaskDefinitionResolver(repository)
+                .resolvePinned("OA_EXPENSE_VOUCHER", 18L, "sha256-a");
+
+        assertEquals(18L, resolved.revisionId());
+        assertEquals(TaskType.OA_TO_U8, resolved.taskType());
+    }
+
+    @Test
+    void identifiesCatalogTasksEvenWhenTheyDoNotYetHaveAPublishedRevision() throws Exception
+    {
+        InMemoryRepository repository = new InMemoryRepository();
+        repository.add("OA_DRAFT", true, TaskType.OA_TO_U8, null, null);
+        TaskDefinitionResolver resolver = new TaskDefinitionResolver(repository);
+
+        assertTrue(resolver.isCatalogTask("OA_DRAFT"));
+        assertFalse(resolver.isCatalogTask("U8_TO_OA_LEGACY"));
+    }
+
     private final class InMemoryRepository implements TaskDefinitionRepository
     {
         private final Map<String, IntegrationTaskDefinition> tasks = new LinkedHashMap<>();
@@ -56,6 +84,20 @@ class TaskDefinitionResolverTest
                         RevisionStatus.PUBLISHED, json.readTree("{\"operationCode\":\"VOUCHER_ADD\"}"), checksum,
                         Map.of("u8Connection", "1")));
             }
+        }
+
+        void disable(String taskCode)
+        {
+            IntegrationTaskDefinition task = tasks.get(taskCode);
+            tasks.put(taskCode, new IntegrationTaskDefinition(task.taskCode(), task.taskName(), task.taskType(), false,
+                    task.activeRevisionId(), task.draftRevisionId(), task.configVersion()));
+        }
+
+        void archiveRevision(Long revisionId)
+        {
+            TaskRevision revision = revisions.get(revisionId);
+            revisions.put(revisionId, new TaskRevision(revision.revisionId(), revision.taskCode(), revision.revisionNo(),
+                    RevisionStatus.ARCHIVED, revision.config(), revision.checksum(), revision.dependencyRevisions()));
         }
 
         @Override

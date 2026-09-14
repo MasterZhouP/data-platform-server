@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,15 +28,23 @@ import com.ruoyi.integration.execution.domain.IntegrationExecutionStage;
 import com.ruoyi.integration.execution.repository.ExecutionRepository;
 import com.ruoyi.integration.execution.support.SensitiveDataMasker;
 import com.ruoyi.integration.pipeline.push.PushPipelineRunner;
+import com.ruoyi.integration.oatou8.PostProcessPendingException;
 import com.ruoyi.integration.task.ExecutionStageRecorder;
 import com.ruoyi.integration.task.OaToU8PushHandler;
 import com.ruoyi.integration.task.PushExecutionContext;
 import com.ruoyi.integration.task.PushFailureException;
 import com.ruoyi.integration.task.PushHandlerRegistry;
 import com.ruoyi.integration.task.PushResult;
+import com.ruoyi.integration.task.TaskExecutor;
+import com.ruoyi.integration.task.TaskExecutorRegistry;
 import com.ruoyi.integration.task.TaskAction;
 import com.ruoyi.integration.task.TriggerSource;
 import com.ruoyi.integration.task.TriggerCommand;
+import com.ruoyi.integration.taskdefinition.PublishedTaskRevision;
+import com.ruoyi.integration.taskdefinition.TaskDefinitionNotFoundException;
+import com.ruoyi.integration.taskdefinition.TaskDefinitionResolver;
+import com.ruoyi.integration.taskdefinition.TaskType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 class IntegrationExecutionFlowTest
 {
@@ -195,6 +204,75 @@ class IntegrationExecutionFlowTest
     }
 
     @Test
+    void configuredTaskPinsItsRevisionAndUsesTheTypeExecutor()
+    {
+        TaskDefinitionResolver definitions = mock(TaskDefinitionResolver.class);
+        PublishedTaskRevision revision = revision();
+        when(definitions.resolvePublished("OA_CONFIG")).thenReturn(revision);
+        when(definitions.resolvePinned("OA_CONFIG", 18L, "sha256-config")).thenReturn(revision);
+        TaskExecutor executor = mock(TaskExecutor.class);
+        when(executor.taskType()).thenReturn(TaskType.OA_TO_U8);
+        when(executor.execute(any(), any())).thenReturn(PushResult.success("M-480", "{\"request\":true}", "{\"ok\":true}"));
+        SensitiveDataMasker masker = new SensitiveDataMasker(2000);
+        PushHandlerRegistry handlers = new PushHandlerRegistry(List.of(handler));
+        service = new IntegrationExecutionService(repository, handlers, new TaskExecutorRegistry(List.of(executor)),
+                definitions, publisher, masker);
+        runner = new PushPipelineRunner(repository, handlers, new TaskExecutorRegistry(List.of(executor)), definitions, masker);
+
+        AcceptanceResult accepted = service.accept(new TriggerCommand("OA_CONFIG", "M-480", "F-48", "S-48"));
+
+        IntegrationExecution pending = repository.findById(accepted.executionId());
+        assertEquals(18L, pending.getTaskRevisionId());
+        assertEquals("sha256-config", pending.getTaskChecksum());
+        runner.run(accepted.executionId());
+
+        assertEquals(ExecutionStatus.SUCCESS.name(), repository.findById(accepted.executionId()).getStatus());
+        verify(executor).execute(any(), any());
+    }
+
+    @Test
+    void requiredPostProcessPendingMarksTheConfiguredExecutionPartiallySuccessful()
+    {
+        TaskDefinitionResolver definitions = mock(TaskDefinitionResolver.class);
+        PublishedTaskRevision revision = revision();
+        when(definitions.resolvePublished("OA_CONFIG")).thenReturn(revision);
+        when(definitions.resolvePinned("OA_CONFIG", 18L, "sha256-config")).thenReturn(revision);
+        TaskExecutor executor = mock(TaskExecutor.class);
+        when(executor.taskType()).thenReturn(TaskType.OA_TO_U8);
+        when(executor.execute(any(), any())).thenThrow(new PostProcessPendingException("RESULT_NOT_READY",
+                "凭证编号尚未可查", "RESULT_VOUCHER_ATTEMPT_3", "{\"voucherNo\":\"记-001\"}"));
+        SensitiveDataMasker masker = new SensitiveDataMasker(2000);
+        PushHandlerRegistry handlers = new PushHandlerRegistry(List.of(handler));
+        TaskExecutorRegistry executors = new TaskExecutorRegistry(List.of(executor));
+        service = new IntegrationExecutionService(repository, handlers, executors, definitions, publisher, masker);
+        runner = new PushPipelineRunner(repository, handlers, executors, definitions, masker);
+
+        AcceptanceResult accepted = service.accept(new TriggerCommand("OA_CONFIG", "M-481", null, null));
+        runner.run(accepted.executionId());
+
+        IntegrationExecution partial = repository.findById(accepted.executionId());
+        assertEquals(ExecutionStatus.PARTIAL_SUCCESS.name(), partial.getStatus());
+        assertEquals("RESULT_VOUCHER_ATTEMPT_3", partial.getLastCompletedStage());
+        assertEquals("{\"voucherNo\":\"记-001\"}", partial.getResultOutputsJson());
+        assertTrue(partial.getU8Confirmed());
+    }
+
+    @Test
+    void draftCatalogTaskCannotFallBackToALegacyHandlerWithTheSameTaskCode()
+    {
+        TaskDefinitionResolver definitions = mock(TaskDefinitionResolver.class);
+        when(definitions.resolvePublished("TEST_PUSH"))
+                .thenThrow(new TaskDefinitionNotFoundException("TEST_PUSH"));
+        when(definitions.isCatalogTask("TEST_PUSH")).thenReturn(true);
+        SensitiveDataMasker masker = new SensitiveDataMasker(2000);
+        service = new IntegrationExecutionService(repository, new PushHandlerRegistry(List.of(handler)),
+                new TaskExecutorRegistry(List.of()), definitions, publisher, masker);
+
+        assertThrows(TaskDefinitionNotFoundException.class,
+                () -> service.accept(new TriggerCommand("TEST_PUSH", "M-482", null, null)));
+    }
+
+    @Test
     void rejectedExecutorLeavesExecutionPendingForLaterScan()
     {
         AcceptanceResult accepted = service.accept(new TriggerCommand("TEST_PUSH", "M-500", null, null));
@@ -227,6 +305,12 @@ class IntegrationExecutionFlowTest
         assertEquals(null, listed.getRequestPayload());
         assertEquals(null, listed.getResponsePayload());
         assertEquals(null, listed.getDedupKey());
+    }
+
+    private PublishedTaskRevision revision()
+    {
+        return new PublishedTaskRevision("OA_CONFIG", 18L, "sha256-config", TaskType.OA_TO_U8,
+                new ObjectMapper().createObjectNode(), Map.of("u8Connection", "1"));
     }
 
     private static final class MutableTestHandler implements OaToU8PushHandler
