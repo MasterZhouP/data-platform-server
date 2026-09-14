@@ -2,6 +2,7 @@ package com.ruoyi.web.controller.integration.reference;
 
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.integration.reference.model.ReferenceException;
+import com.ruoyi.web.controller.integration.openapi.IntegrationOpenApiController;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +17,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes = { ReferenceOpenApiController.class, ReferenceAdminController.class })
+@RestControllerAdvice(assignableTypes = { ReferenceOpenApiController.class, ReferenceAdminController.class,
+        IntegrationOpenApiController.class })
 public class ReferenceApiExceptionHandler
 {
     private static final Logger log = LoggerFactory.getLogger(ReferenceApiExceptionHandler.class);
@@ -35,6 +37,11 @@ public class ReferenceApiExceptionHandler
     public ResponseEntity<?> contentType(HttpMediaTypeNotSupportedException exception, HttpServletRequest request)
     {
         return respond(request, 415, "UNSUPPORTED_MEDIA_TYPE", "请使用 application/json", false, null);
+    }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<?> argument(IllegalArgumentException exception, HttpServletRequest request)
+    {
+        return respond(request, 400, "INVALID_ARGUMENT", exception.getMessage(), false, null);
     }
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<?> unavailable(DataAccessException exception, HttpServletRequest request)

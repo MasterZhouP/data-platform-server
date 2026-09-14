@@ -85,6 +85,15 @@ public class OaToU8RuntimeConfiguration
                 sqlVariableResolver, jsonTemplateRenderer, u8Gateway, jsonResponseEvaluator, repository, json);
     }
 
+    @Bean
+    public OaToU8PreviewService oaToU8PreviewService(TaskConfigValidator oaToU8TaskConfigValidator,
+            ReadOnlySqlExecutor integrationReadOnlySqlExecutor, SqlVariableResolver sqlVariableResolver,
+            JsonTemplateRenderer jsonTemplateRenderer, ObjectMapper json)
+    {
+        return new OaToU8PreviewService(oaToU8TaskConfigValidator, integrationReadOnlySqlExecutor,
+                sqlVariableResolver, jsonTemplateRenderer, json);
+    }
+
     private void addIfPresent(Map<String, NamedParameterJdbcTemplate> templates, String key,
             ObjectProvider<NamedParameterJdbcTemplate> provider)
     {

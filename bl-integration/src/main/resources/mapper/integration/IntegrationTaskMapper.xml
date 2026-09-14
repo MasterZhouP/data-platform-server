@@ -56,4 +56,79 @@
             CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )
     </insert>
+
+    <select id="nextRevisionNo" resultType="int">
+        SELECT COALESCE(MAX(revision_no), 0) + 1
+        FROM int_integration_task_revision
+        WHERE task_code = #{taskCode}
+    </select>
+
+    <insert id="insertGeneratedRevision" useGeneratedKeys="true" keyProperty="revisionId">
+        INSERT INTO int_integration_task_revision (
+            task_code, revision_no, status, config_json, config_checksum, dependency_revisions_json,
+            validation_json, change_note, create_time, update_time
+        ) VALUES (
+            #{taskCode}, #{revisionNo}, #{status}, #{configJson}, #{checksum}, #{dependencyRevisionsJson},
+            #{validationJson}, #{changeNote}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <update id="replaceDraftRevision">
+        UPDATE int_integration_task_revision
+        SET status = #{status}, config_json = #{configJson}, config_checksum = #{checksum},
+            dependency_revisions_json = #{dependencyRevisionsJson}, validation_json = NULL,
+            change_note = #{changeNote}, update_time = CURRENT_TIMESTAMP
+        WHERE revision_id = #{revisionId} AND status IN ('DRAFT', 'VALIDATED')
+    </update>
+
+    <update id="markRevisionValidated">
+        UPDATE int_integration_task_revision
+        SET status = 'VALIDATED', validation_json = #{validationJson}, update_time = CURRENT_TIMESTAMP
+        WHERE revision_id = #{revisionId} AND status IN ('DRAFT', 'VALIDATED')
+    </update>
+
+    <update id="archiveRevision">
+        UPDATE int_integration_task_revision
+        SET status = 'ARCHIVED', update_time = CURRENT_TIMESTAMP
+        WHERE revision_id = #{revisionId} AND status = 'PUBLISHED'
+    </update>
+
+    <update id="publishRevision">
+        UPDATE int_integration_task_revision
+        SET status = 'PUBLISHED', update_time = CURRENT_TIMESTAMP
+        WHERE revision_id = #{revisionId} AND status = 'VALIDATED'
+    </update>
+
+    <update id="updateTaskDraft">
+        UPDATE int_integration_task
+        SET task_name = #{taskName}, enabled = #{enabled}, draft_revision_id = #{draftRevisionId},
+            config_version = config_version + 1, update_time = CURRENT_TIMESTAMP
+        WHERE task_code = #{taskCode} AND config_version = #{expectedVersion}
+    </update>
+
+    <update id="advanceConfigVersion">
+        UPDATE int_integration_task
+        SET config_version = config_version + 1, update_time = CURRENT_TIMESTAMP
+        WHERE task_code = #{taskCode} AND config_version = #{expectedVersion}
+    </update>
+
+    <update id="publishTask">
+        UPDATE int_integration_task
+        SET active_revision_id = #{activeRevisionId}, draft_revision_id = NULL,
+            config_version = config_version + 1, update_time = CURRENT_TIMESTAMP
+        WHERE task_code = #{taskCode} AND config_version = #{expectedVersion}
+    </update>
+
+    <select id="listTasks" resultMap="Task">
+        SELECT task_code, task_name, task_type, enabled, active_revision_id, draft_revision_id, config_version
+        FROM int_integration_task
+        ORDER BY task_code
+    </select>
+
+    <select id="listRevisions" resultMap="Revision">
+        SELECT revision_id, task_code, revision_no, status, config_json, config_checksum, dependency_revisions_json
+        FROM int_integration_task_revision
+        WHERE task_code = #{taskCode}
+        ORDER BY revision_no DESC
+    </select>
 </mapper>
