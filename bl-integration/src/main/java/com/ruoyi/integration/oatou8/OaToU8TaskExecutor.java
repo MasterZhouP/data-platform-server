@@ -10,6 +10,7 @@ import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ruoyi.integration.client.u8.U8CallResult;
 import com.ruoyi.integration.client.u8.U8CallStatus;
@@ -44,6 +45,12 @@ import com.ruoyi.integration.taskdefinition.TaskType;
  */
 public class OaToU8TaskExecutor implements TaskExecutor
 {
+    /**
+     * 仅用于执行检查点的内部字段。它保存结果查询声明引用的 U8 标量，
+     * 不属于对操作员展示的业务输出，恢复时也绝不能把完整 U8 响应重新落库。
+     */
+    private static final String U8_RESPONSE_CHECKPOINT_FIELD = "__u8Response";
+
     private final Function<JsonNode, OaToU8TaskConfig> configParser;
     private final ReadOnlySqlExecutor sql;
     private final SqlVariableResolver sqlVariables;
@@ -81,9 +88,9 @@ public class OaToU8TaskExecutor implements TaskExecutor
         if ("POST_PROCESS".equals(execution.getResumeMode()))
         {
             // 已确认 U8 的重试永远跳过数据准备、模板渲染和业务调用，避免重复生成单据。
-            ObjectNode outputs = outputsFrom(execution.getResultOutputsJson());
-            runResultQueries(execution, config, Map.of(), outputs, recorder);
-            return PushResult.success(execution.getMasterId(), null, write(outputs));
+            CheckpointState checkpoint = checkpointStateFrom(execution.getResultOutputsJson());
+            runResultQueries(execution, config, Map.of(), checkpoint.u8Response(), checkpoint.outputs(), recorder);
+            return PushResult.success(execution.getMasterId(), null, write(checkpoint.outputs()));
         }
 
         Map<String, Object> data = runDataSteps(execution, config, recorder);
@@ -102,10 +109,11 @@ public class OaToU8TaskExecutor implements TaskExecutor
         }
 
         ObjectNode outputs = evaluation.outputs();
+        ObjectNode u8Response = responseBindingsSnapshot(config, responseJson);
         // 该检查点先于结果轮询写入；任何后续失败都只能续跑，不得再次调用 U8。
-        repository.checkpointU8Confirmed(execution.getExecutionId(), write(outputs), "U8_CONFIRMED");
+        repository.checkpointU8Confirmed(execution.getExecutionId(), write(checkpointState(outputs, u8Response)), "U8_CONFIRMED");
         recorder.succeeded("U8_CONFIRMED", write(outputs));
-        runResultQueries(execution, config, data, outputs, recorder);
+        runResultQueries(execution, config, data, u8Response, outputs, recorder);
         return PushResult.success(execution.getMasterId(), write(request), write(outputs));
     }
 
@@ -187,7 +195,7 @@ public class OaToU8TaskExecutor implements TaskExecutor
     }
 
     private void runResultQueries(IntegrationExecution execution, OaToU8TaskConfig config, Map<String, Object> data,
-            ObjectNode outputs, ExecutionStageRecorder recorder)
+            ObjectNode u8Response, ObjectNode outputs, ExecutionStageRecorder recorder)
     {
         String lastStage = execution.getLastCompletedStage() == null ? "U8_CONFIRMED" : execution.getLastCompletedStage();
         for (ResultQueryStep step : config.resultQueries())
@@ -195,13 +203,13 @@ public class OaToU8TaskExecutor implements TaskExecutor
             boolean ready = false;
             for (int attempt = 1; attempt <= step.maxAttempts(); attempt++)
             {
-                waitBeforeAttempt(step, attempt);
                 String stage = "RESULT_" + step.code() + "_ATTEMPT_" + attempt;
                 lastStage = stage;
+                waitBeforeAttempt(step, attempt, stage, checkpointState(outputs, u8Response));
                 recorder.started(stage, "{\"datasourceKey\":\"" + step.datasourceKey() + "\"}");
                 try
                 {
-                    ExecutionVariableContext context = context(execution, config, data, map(outputs), map(outputs));
+                    ExecutionVariableContext context = context(execution, config, data, map(u8Response), map(outputs));
                     ReadOnlySqlResult result = sql.execute(step.datasourceKey(), step.sql(), step.cardinality(),
                             sqlVariables.resolve(step.parameterBindings(), context));
                     ready = extractResultOutputs(result.value(), step.outputMappings(), outputs);
@@ -220,7 +228,7 @@ public class OaToU8TaskExecutor implements TaskExecutor
             if (!ready && step.required())
             {
                 throw new PostProcessPendingException("RESULT_NOT_READY", "U8确认成功，但必需结果尚未就绪",
-                        lastStage, write(outputs));
+                        lastStage, write(checkpointState(outputs, u8Response)));
             }
         }
     }
@@ -239,7 +247,7 @@ public class OaToU8TaskExecutor implements TaskExecutor
         return true;
     }
 
-    private void waitBeforeAttempt(ResultQueryStep step, int attempt)
+    private void waitBeforeAttempt(ResultQueryStep step, int attempt, String stage, ObjectNode checkpoint)
     {
         int delay = attempt == 1 ? step.initialDelayMs() : step.intervalMs();
         if (delay == 0)
@@ -254,8 +262,63 @@ public class OaToU8TaskExecutor implements TaskExecutor
         {
             Thread.currentThread().interrupt();
             throw new PostProcessPendingException("POST_PROCESS_INTERRUPTED", "结果查询等待被中断",
-                    "RESULT_" + step.code() + "_ATTEMPT_" + attempt, "{}");
+                    stage, write(checkpoint));
         }
+    }
+
+    /**
+     * U8 调用确认成功后，只保存结果查询明确声明需要的标量响应字段；
+     * 这样部分成功的续跑仍能绑定 u8.response.*，又不会把整段外部响应作为长期业务数据保存。
+     */
+    private ObjectNode responseBindingsSnapshot(OaToU8TaskConfig config, JsonNode response)
+    {
+        ObjectNode snapshot = json.createObjectNode();
+        for (ResultQueryStep step : config.resultQueries())
+        {
+            for (String variable : step.parameterBindings().values())
+            {
+                if (!variable.startsWith("u8.response."))
+                {
+                    continue;
+                }
+                JsonNode value = responsePath(response, variable.substring("u8.response.".length()));
+                if (!value.isMissingNode() && value.isValueNode())
+                {
+                    putPath(snapshot, variable.substring("u8.response.".length()), value);
+                }
+            }
+        }
+        return snapshot;
+    }
+
+    private JsonNode responsePath(JsonNode response, String path)
+    {
+        JsonNode current = response;
+        for (String segment : path.split("\\."))
+        {
+            if (!current.isObject())
+            {
+                return MissingNode.getInstance();
+            }
+            current = current.path(segment);
+        }
+        return current;
+    }
+
+    private void putPath(ObjectNode target, String path, JsonNode value)
+    {
+        String[] segments = path.split("\\.");
+        ObjectNode current = target;
+        for (int index = 0; index < segments.length - 1; index++)
+        {
+            JsonNode existing = current.get(segments[index]);
+            if (!(existing instanceof ObjectNode))
+            {
+                existing = current.putObject(segments[index]);
+            }
+            current = (ObjectNode) existing;
+        }
+        current.set(segments[segments.length - 1], value.deepCopy());
     }
 
     private ExecutionVariableContext context(IntegrationExecution execution, OaToU8TaskConfig config,
@@ -273,17 +336,30 @@ public class OaToU8TaskExecutor implements TaskExecutor
                 immutableContext(data), immutableContext(u8Response), immutableContext(result));
     }
 
-    private ObjectNode outputsFrom(String raw)
+    private CheckpointState checkpointStateFrom(String raw)
     {
         try
         {
             JsonNode value = raw == null ? json.createObjectNode() : json.readTree(raw);
-            return value instanceof ObjectNode node ? node.deepCopy() : json.createObjectNode();
+            ObjectNode state = value instanceof ObjectNode node ? node.deepCopy() : json.createObjectNode();
+            JsonNode savedResponse = state.remove(U8_RESPONSE_CHECKPOINT_FIELD);
+            ObjectNode u8Response = savedResponse instanceof ObjectNode node ? node.deepCopy() : json.createObjectNode();
+            return new CheckpointState(state, u8Response);
         }
         catch (JsonProcessingException ex)
         {
             throw new IllegalStateException("执行检查点输出不是有效JSON", ex);
         }
+    }
+
+    private ObjectNode checkpointState(ObjectNode outputs, ObjectNode u8Response)
+    {
+        ObjectNode state = outputs.deepCopy();
+        if (!u8Response.isEmpty())
+        {
+            state.set(U8_RESPONSE_CHECKPOINT_FIELD, u8Response.deepCopy());
+        }
+        return state;
     }
 
     private Map<String, Object> map(JsonNode node)
@@ -311,4 +387,6 @@ public class OaToU8TaskExecutor implements TaskExecutor
             throw new IllegalStateException("任务运行输出无法序列化", ex);
         }
     }
+
+    private record CheckpointState(ObjectNode outputs, ObjectNode u8Response) { }
 }

@@ -158,3 +158,25 @@ SET @int_reference_material_seed := IF(
 PREPARE int_reference_material_seed_stmt FROM @int_reference_material_seed;
 EXECUTE int_reference_material_seed_stmt;
 DEALLOCATE PREPARE int_reference_material_seed_stmt;
+
+-- 任务中心是控制面唯一入口：菜单只授予受控配置权限，不暴露脚本、任意外部地址或写库能力。
+SET @integration_task_root := (
+    SELECT menu_id FROM sys_menu WHERE parent_id = 0 AND path = 'integration' AND menu_type = 'M' ORDER BY menu_id LIMIT 1
+);
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '任务中心', @integration_task_root, 4, 'task', 'integration/task/index', '', '', 1, 0, 'C', '0', '0', 'integration:task:list', 'list', 'admin', NOW(), '', NULL, '版本化集成任务配置'
+WHERE @integration_task_root IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE parent_id = @integration_task_root AND path = 'task' AND menu_type = 'C');
+
+SET @integration_task_menu := (
+    SELECT menu_id FROM sys_menu WHERE parent_id = @integration_task_root AND path = 'task' AND menu_type = 'C' ORDER BY menu_id LIMIT 1
+);
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '任务编辑', @integration_task_menu, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:task:edit', '#', 'admin', NOW(), '', NULL, ''
+WHERE @integration_task_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:task:edit');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '任务预览', @integration_task_menu, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:task:preview', '#', 'admin', NOW(), '', NULL, ''
+WHERE @integration_task_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:task:preview');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '任务发布', @integration_task_menu, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:task:publish', '#', 'admin', NOW(), '', NULL, ''
+WHERE @integration_task_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:task:publish');

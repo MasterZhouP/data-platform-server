@@ -83,6 +83,30 @@ class OaToU8TaskExecutorTest
         verify(repository, never()).checkpointU8Confirmed(any(), any(), any());
     }
 
+    @Test
+    void postProcessResumeUsesOnlySavedU8ScalarBindingsWithoutPostingAgain() throws Exception
+    {
+        U8Gateway gateway = mock(U8Gateway.class);
+        ExecutionRepository repository = mock(ExecutionRepository.class);
+        ReadOnlySqlExecutor sql = (source, statement, cardinality, parameters) -> {
+            assertEquals("T-9", parameters.get("tradeId"));
+            return queryResult("{\"voucherNo\":\"记-001\"}");
+        };
+        ResultQueryStep resultStep = new ResultQueryStep("voucher", 1, "u8", "select voucher", ResultCardinality.ONE,
+                Map.of("tradeId", "u8.response.tradeId"), true, 0, 100, 1,
+                Map.of("voucherNo", "/voucherNo"));
+        OaToU8TaskExecutor executor = executor(config(List.of(), List.of(resultStep)), sql, gateway, repository);
+        IntegrationExecution execution = execution("POST_PROCESS",
+                "{\"voucherNo\":\"记-001\",\"__u8Response\":{\"tradeId\":\"T-9\"}}");
+        execution.setU8Confirmed(true);
+        execution.setLastCompletedStage("U8_CONFIRMED");
+
+        PushResult result = executor.execute(resolved(execution), new NoopRecorder());
+
+        assertTrue(result.responsePayload().contains("记-001"));
+        verify(gateway, never()).postBusiness(any(), any(), any());
+    }
+
     private OaToU8TaskExecutor executor(OaToU8TaskConfig config, ReadOnlySqlExecutor sql,
             U8Gateway gateway, ExecutionRepository repository)
     {

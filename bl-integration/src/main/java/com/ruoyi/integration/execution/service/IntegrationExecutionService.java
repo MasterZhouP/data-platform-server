@@ -9,6 +9,7 @@ import com.ruoyi.integration.execution.domain.IntegrationExecution;
 import com.ruoyi.integration.execution.domain.IntegrationExecutionStage;
 import com.ruoyi.integration.execution.repository.ExecutionRepository;
 import com.ruoyi.integration.execution.support.SensitiveDataMasker;
+import com.ruoyi.integration.execution.support.ExecutionResultOutputSanitizer;
 import com.ruoyi.integration.task.IntegrationTaskHandler;
 import com.ruoyi.integration.task.PushHandlerRegistry;
 import com.ruoyi.integration.task.TaskExecutorRegistry;
@@ -36,6 +37,7 @@ public class IntegrationExecutionService implements ExecutionAcceptor
     private final TaskDefinitionResolver taskDefinitionResolver;
     private final ApplicationEventPublisher eventPublisher;
     private final SensitiveDataMasker masker;
+    private final ExecutionResultOutputSanitizer resultOutputSanitizer = new ExecutionResultOutputSanitizer();
 
     @Autowired
     public IntegrationExecutionService(ExecutionRepository repository, PushHandlerRegistry handlerRegistry,
@@ -137,6 +139,8 @@ public class IntegrationExecutionService implements ExecutionAcceptor
             value.setRequestPayload(null);
             value.setResponsePayload(null);
             value.setDedupKey(null);
+            // 列表只用于定位执行记录，不返回结果检查点，避免续跑专用上下文进入批量列表响应。
+            value.setResultOutputsJson(null);
             decorateRetryDecision(value);
         });
         return values;
@@ -150,6 +154,8 @@ public class IntegrationExecutionService implements ExecutionAcceptor
             throw new ExecutionNotFoundException(executionId);
         }
         execution.setStages(repository.findStages(executionId));
+        // 详情仅展示可读业务输出；U8 响应标量仍留在数据库检查点，供后处理续跑使用。
+        execution.setResultOutputsJson(resultOutputSanitizer.sanitize(execution.getResultOutputsJson()));
         decorateRetryDecision(execution);
         return execution;
     }
