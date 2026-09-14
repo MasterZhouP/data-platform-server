@@ -14,6 +14,8 @@
 
 - Completed: common task/revision catalogue, fixed OA→U8 executor, shared U8 gateway, read-only SQL/template services, execution checkpoints and safe post-processing retry, task management APIs and typed OA→U8 workbench.
 - Completed in this follow-up: synchronous reference tasks now use the same published task revision as their sole runtime configuration source. The legacy reference table and its mapper are migration-only concerns; the reference menu redirects to the task-centre reference filter while preserving its dedicated SQL/field editor.
+- Completed in review follow-up: the unified task centre can create the first reference task, both configurable SQL paths reject SQL Server `SELECT ... INTO`, legacy reference roles retain task-centre visibility without receiving OA→U8 edit/publish rights, and duplicate reference task codes return a stable conflict response.
+- Completed in review follow-up: production classpath reference SQL/metadata resources were removed; equivalent files are test fixtures only, so every runtime reference SQL source is an immutable published task revision.
 - Retained by design: U8→OA sales-outbound remains code-managed. It is not converted into a page-configured workflow or arbitrary script engine in this release.
 
 ## Global Constraints

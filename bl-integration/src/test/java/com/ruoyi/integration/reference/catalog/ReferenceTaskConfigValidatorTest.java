@@ -19,4 +19,14 @@ class ReferenceTaskConfigValidatorTest
         assertThrows(IllegalArgumentException.class,
                 () -> validator.parseAndValidate("REFERENCE_DEMO", "参照示例", true, config));
     }
+
+    @Test
+    void rejectsSelectIntoBecauseItCreatesTablesOnSqlServer()
+    {
+        ObjectNode config = ReferenceCatalogTestFixture.config(json, "u8");
+        config.put("sqlText", "SELECT code INTO reference_shadow FROM inventory");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> validator.parseAndValidate("REFERENCE_DEMO", "参照示例", true, config));
+    }
 }

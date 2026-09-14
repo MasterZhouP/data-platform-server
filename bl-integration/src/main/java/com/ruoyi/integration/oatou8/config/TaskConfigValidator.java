@@ -17,7 +17,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class TaskConfigValidator
 {
     private static final Pattern CODE = Pattern.compile("[A-Za-z][A-Za-z0-9_]{0,49}");
-    private static final Pattern WRITE_SQL = Pattern.compile("(?is)\\b(UPDATE|INSERT|DELETE|MERGE|REPLACE|CALL|EXEC|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\\b");
+    // SQL Server 的 SELECT ... INTO 可写出新表，必须与其他写语句一起在配置保存前拦截。
+    private static final Pattern WRITE_SQL = Pattern.compile("(?is)\\b(UPDATE|INSERT|DELETE|MERGE|REPLACE|CALL|EXEC|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|INTO)\\b");
     private static final Pattern COMMENTS = Pattern.compile("(?s)/\\*.*?\\*/|--[^\\r\\n]*");
     private static final Set<String> ROOT_FIELDS = Set.of("constants", "dataSteps", "u8", "resultQueries");
     private static final Set<String> QUERY_FIELDS = Set.of("code", "order", "datasourceKey", "sql", "cardinality", "parameterBindings");

@@ -18,6 +18,7 @@ class TaskConfigValidatorTest
     void rejectsWriteSqlAndUnsafePlaceholderSyntax()
     {
         assertError(configWithSql("UPDATE formmain_001 SET field001='x'"), "SQL_NOT_READ_ONLY");
+        assertError(configWithSql("SELECT source_id INTO integration_shadow FROM formmain_001"), "SQL_NOT_READ_ONLY");
         assertError(configWithSql("select * from formmain where id = ${trigger.masterId}"), "SQL_PLACEHOLDER_NOT_ALLOWED");
     }
 

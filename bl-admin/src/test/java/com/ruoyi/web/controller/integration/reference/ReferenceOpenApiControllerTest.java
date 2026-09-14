@@ -87,7 +87,7 @@ class ReferenceOpenApiControllerTest
     }
     private ReferenceTask task(String code, boolean enabled)
     {
-        return new ReferenceTask(code, code + "参照", enabled, "u8", "integration/reference/material.sql",
+        return new ReferenceTask(code, code + "参照", enabled, "u8", "SELECT 'fixture' AS code",
                 mapper.createObjectNode().put("metadataVersion", "1"));
     }
 }

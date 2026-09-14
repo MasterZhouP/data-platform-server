@@ -60,6 +60,18 @@ class ReferenceCatalogTest
     }
 
     @Test
+    void returnsConflictWhenTheReferenceTaskCodeAlreadyExists() throws Exception
+    {
+        when(tasks.create(eq("DEMO"), any(TaskDraftCommand.class)))
+                .thenThrow(new IllegalArgumentException("任务编码已存在: DEMO"));
+
+        ReferenceException error = assertThrows(ReferenceException.class, () -> catalog.create(task()));
+
+        assertEquals(409, error.httpStatus());
+        assertEquals("TASK_CODE_CONFLICT", error.code());
+    }
+
+    @Test
     void rejectsAPersistedTaskCodeWithDifferentCase() throws Exception
     {
         when(tasks.detail("demo")).thenReturn(new IntegrationTaskDefinition("DEMO", "示例", TaskType.REFERENCE_QUERY,

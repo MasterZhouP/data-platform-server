@@ -128,7 +128,8 @@ final class ReferenceMetadataValidator {
         require(value != null && !value.isBlank() && value.length() <= 60000, "参照 SQL 不能为空或过长");
         String sql = value.replaceAll("(?s)/\\*.*?\\*/|--[^\\r\\n]*", " ").trim();
         require(!sql.contains("${") && !sql.contains(";") && sql.matches("(?is)^(SELECT|WITH\\b).*"), "参照 SQL 必须是一条只读查询");
-        require(!sql.matches("(?is).*\\b(UPDATE|INSERT|DELETE|MERGE|REPLACE|CALL|EXEC|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\\b.*"), "参照 SQL 不能包含写库或管理指令");
+        // SQL Server 的 SELECT ... INTO 同样会创建结果表；它不能因为以 SELECT 开头而越过只读边界。
+        require(!sql.matches("(?is).*\\b(UPDATE|INSERT|DELETE|MERGE|REPLACE|CALL|EXEC|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|INTO)\\b.*"), "参照 SQL 不能包含写库或管理指令");
     }
     private static void require(boolean condition, String message) {
         if (!condition) throw new ReferenceException("INVALID_ARGUMENT", 400, message, false);

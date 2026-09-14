@@ -1,0 +1,38 @@
+{
+  "taskCode": "U8_MATERIAL_REFERENCE",
+  "taskName": "物料参照",
+  "taskType": "REFERENCE",
+  "executionMode": "SYNC_QUERY",
+  "metadataVersion": "1",
+  "resultSets": [
+    {
+      "resultSetCode": "tou",
+      "resultSetName": "物料参照",
+      "selectionMode": "SINGLE",
+      "fields": [
+        {"name":"zldj","label":"质量等级","order":1,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"iMassDate","label":"保质期天数","order":2,"dataType":"INTEGER","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"cInvCode","label":"编码","order":3,"dataType":"STRING","nullable":true,"filterOperators":["eq","contains","startsWith","isNull","isNotNull"],"sortable":true},
+        {"name":"fdw","label":"辅单位","order":4,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"cInvStd","label":"规格","order":6,"dataType":"STRING","nullable":true,"filterOperators":["eq","contains","startsWith","isNull","isNotNull"],"sortable":true},
+        {"name":"zdw","label":"主单位","order":7,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"cInvName","label":"名称","order":8,"dataType":"STRING","nullable":true,"filterOperators":["eq","contains","startsWith","isNull","isNotNull"],"sortable":true},
+        {"name":"zdwbm","label":"主单位编码","order":9,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"fdwbm","label":"辅单位编码","order":10,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"chdl","label":"存货大类","order":11,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"hsl","label":"换算率","order":12,"dataType":"DECIMAL","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"cd","label":"产地","order":13,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"jz","label":"净重","order":14,"dataType":"DECIMAL","nullable":true,"filterOperators":[],"sortable":false},
+        {"name":"mrscbm","label":"默认生产部门","order":15,"dataType":"STRING","nullable":true,"filterOperators":[],"sortable":false}
+      ],
+      "parameters": [],
+      "defaults": {
+        "displayFields": ["cInvCode", "cInvName", "cInvStd", "zdw", "fdw", "zldj"],
+        "filterFields": ["cInvCode", "cInvName", "cInvStd"],
+        "sort": [{"field":"cInvCode","direction":"ASC"}],
+        "pageSize": 200
+      },
+      "limits": {"maxPageSize":200,"maxFilterConditions":20,"maxFilterDepth":3,"maxSortFields":5,"maxInValues":100,"queryTimeoutMs":10000}
+    }
+  ]
+}

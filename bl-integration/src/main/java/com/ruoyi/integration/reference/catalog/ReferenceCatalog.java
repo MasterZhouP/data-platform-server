@@ -13,6 +13,7 @@ import com.ruoyi.integration.taskdefinition.TaskType;
 import com.ruoyi.integration.taskdefinition.management.TaskDraftCommand;
 import com.ruoyi.integration.taskdefinition.management.TaskManagementService;
 import com.ruoyi.integration.taskdefinition.management.TaskVersionConflictException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -84,8 +85,17 @@ public class ReferenceCatalog
         {
             throw versionMismatch();
         }
+        catch (DuplicateKeyException ex)
+        {
+            // 并发创建时由唯一键作最终兜底；仍以可识别的冲突返回给页面，不能泄露数据库异常。
+            throw taskCodeConflict();
+        }
         catch (IllegalArgumentException ex)
         {
+            if (ex.getMessage() != null && ex.getMessage().startsWith("任务编码已存在"))
+            {
+                throw taskCodeConflict();
+            }
             throw new ReferenceException("INVALID_ARGUMENT", 400, ex.getMessage(), false);
         }
     }
@@ -183,5 +193,10 @@ public class ReferenceCatalog
     private ReferenceException versionMismatch()
     {
         return new ReferenceException("METADATA_VERSION_MISMATCH", 409, "配置已更新，请刷新后再保存", false);
+    }
+
+    private ReferenceException taskCodeConflict()
+    {
+        return new ReferenceException("TASK_CODE_CONFLICT", 409, "任务编码已存在，请更换后重试", false);
     }
 }

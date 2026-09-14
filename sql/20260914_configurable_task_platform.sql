@@ -223,3 +223,16 @@ WHERE @integration_task_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu 
 INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
 SELECT '任务发布', @integration_task_menu, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:task:publish', '#', 'admin', NOW(), '', NULL, ''
 WHERE @integration_task_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:task:publish');
+
+-- 已有参照管理员需要继续看见统一控制面。这里只补“任务中心查看”菜单，
+-- 参照的新建/编辑仍使用原 integration:reference:* 权限，绝不借迁移扩大为 OA→U8 的编辑或发布权限。
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT DISTINCT legacy_role.role_id, @integration_task_menu
+FROM sys_role_menu legacy_role
+INNER JOIN sys_menu legacy_menu ON legacy_menu.menu_id = legacy_role.menu_id
+WHERE @integration_task_menu IS NOT NULL
+  AND legacy_menu.perms IN ('integration:reference:list', 'integration:reference:query', 'integration:reference:edit')
+  AND NOT EXISTS (
+      SELECT 1 FROM sys_role_menu assigned
+      WHERE assigned.role_id = legacy_role.role_id AND assigned.menu_id = @integration_task_menu
+  );

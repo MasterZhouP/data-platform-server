@@ -45,8 +45,9 @@ class ReferenceEngineTest {
             s.execute("INSERT INTO InventoryClass VALUES ('AA','原材料')");
             s.execute("INSERT INTO CurrentStock VALUES ('0001',1,2),('0001',1,3),('0002',1,10),('0003',1,5)");
         }
-        ObjectNode metadata = (ObjectNode) mapper.readTree(getClass().getResourceAsStream("/integration/reference/u8-material-metadata.json"));
-        task = new ReferenceTask("U8_MATERIAL_REFERENCE", "物料参照", true, "u8-test", materialSql(), metadata);
+        // 仅测试夹具读取样例 SQL；生产任务一律从已发布任务修订的 sqlText 读取。
+        ObjectNode metadata = (ObjectNode) mapper.readTree(getClass().getResourceAsStream("/fixtures/reference/u8-material-metadata.json"));
+        task = new ReferenceTask("U8_MATERIAL_REFERENCE", "物料参照", true, "u8-test", materialSqlFixture(), metadata);
         // H2 has no COUNT_BIG aggregate. Translate that one dialect spelling at the JDBC boundary;
         // all joins, filters, bound values, sorting, paging, and returned rows run on real JDBC.
         engine = new ReferenceEngine(key -> new DelegatingDataSource(ds) {
@@ -228,8 +229,8 @@ class ReferenceEngineTest {
         assertNull(error.getCause());
     }
 
-    private String materialSql() throws Exception {
-        try (var stream = getClass().getResourceAsStream("/integration/reference/material.sql")) {
+    private String materialSqlFixture() throws Exception {
+        try (var stream = getClass().getResourceAsStream("/fixtures/reference/material.sql")) {
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
     }
