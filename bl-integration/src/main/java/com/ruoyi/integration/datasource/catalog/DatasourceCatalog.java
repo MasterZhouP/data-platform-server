@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -29,6 +30,12 @@ public class DatasourceCatalog {
 
     @Transactional(rollbackFor = RuntimeException.class)
     public RevisionToken saveDraft(String key, String expectedRevision, ObjectNode nonSecretConfig, String secretId) {
+        return saveDraft(key, expectedRevision, nonSecretConfig, secretId, new RevisionToken(UUID.randomUUID().toString()));
+    }
+
+    @Transactional(rollbackFor = RuntimeException.class)
+    public RevisionToken saveDraft(String key, String expectedRevision, ObjectNode nonSecretConfig, String secretId,
+                                   RevisionToken candidate) {
         requireKey(key);
         if (nonSecretConfig == null) {
             throw new ConfigurationException("INVALID_ARGUMENT", 400, "数据源配置不能为空");
@@ -56,7 +63,7 @@ public class DatasourceCatalog {
             throw conflict();
         }
 
-        String revisionId = UUID.randomUUID().toString();
+        String revisionId = candidate.value();
         ObjectNode stored = nonSecretConfig.deepCopy();
         stored.remove("password");
         stored.remove("passwordUpdate");
@@ -77,6 +84,83 @@ public class DatasourceCatalog {
         return readRevision(key, requireCatalog(key).activeRevisionId(), "数据源尚未启用");
     }
 
+    public List<DatasourceRow> list() {
+        return mapper.listCatalog();
+    }
+
+    public DatasourceRow row(String key) {
+        return requireCatalog(key);
+    }
+
+    public DatasourceRevision draftRevision(String key) {
+        DatasourceRow row = requireCatalog(key);
+        if (!hasText(row.draftRevisionId())) {
+            throw new ConfigurationException("CONFIGURATION_NOT_READY", 409, "数据源尚无草稿");
+        }
+        DatasourceRevision revision = mapper.findRevision(row.draftRevisionId());
+        if (revision == null || !key.equals(revision.datasourceKey())) {
+            throw new ConfigurationException("CONFIGURATION_UNAVAILABLE", 503, "数据源配置无法读取");
+        }
+        return revision;
+    }
+
+    @Transactional(rollbackFor = RuntimeException.class)
+    public void recordTest(String key, RevisionToken revisionToken, ObjectNode safeResult) {
+        if (revisionToken == null || safeResult == null) {
+            throw new ConfigurationException("INVALID_ARGUMENT", 400, "检测结果不能为空");
+        }
+        DatasourceRevision revision = revisionFor(key, revisionToken.value());
+        ObjectNode stored = safeResult.deepCopy();
+        stored.remove("password");
+        stored.remove("jdbcUrl");
+        stored.remove("ciphertext");
+        if (mapper.updateLastTest(revision.revisionId(), stored.toString()) != 1) {
+            throw new ConfigurationException("CONFIGURATION_UNAVAILABLE", 503, "检测结果无法保存");
+        }
+    }
+
+    public ObjectNode lastTest(String key, String revisionId) {
+        DatasourceRevision revision = revisionFor(key, revisionId);
+        String stored = mapper.findLastTest(revision.revisionId());
+        if (!hasText(stored)) return json.createObjectNode();
+        try {
+            return (ObjectNode) json.readTree(stored);
+        } catch (Exception malformed) {
+            throw new ConfigurationException("CONFIGURATION_UNAVAILABLE", 503, "检测结果无法读取");
+        }
+    }
+
+    @Transactional(rollbackFor = RuntimeException.class)
+    public boolean activatePointer(String key, RevisionToken candidate, String expectedActiveId) {
+        requireKey(key);
+        if (candidate == null) {
+            throw new ConfigurationException("INVALID_ARGUMENT", 400, "待启用修订不能为空");
+        }
+        DatasourceRevision revision = mapper.findRevision(candidate.value());
+        if (revision == null || !key.equals(revision.datasourceKey())) {
+            throw new ConfigurationException("CONFIGURATION_NOT_FOUND", 404, "待启用的数据源修订不存在");
+        }
+        return mapper.activatePointer(key, candidate.value(), expectedActiveId) == 1;
+    }
+
+    @Transactional(rollbackFor = RuntimeException.class)
+    public boolean disable(String key) {
+        requireKey(key);
+        return mapper.disable(key) == 1;
+    }
+
+    /** Internal only: the currently editable secret, otherwise the active secret to be rebound. */
+    public DatasourceRevision currentSecretRevision(String key) {
+        DatasourceRow row = requireCatalog(key);
+        String revisionId = hasText(row.draftRevisionId()) ? row.draftRevisionId() : row.activeRevisionId();
+        if (!hasText(revisionId)) return null;
+        DatasourceRevision revision = mapper.findRevision(revisionId);
+        if (revision == null || !key.equals(revision.datasourceKey())) {
+            throw new ConfigurationException("CONFIGURATION_UNAVAILABLE", 503, "数据源配置无法读取");
+        }
+        return revision;
+    }
+
     private ObjectNode readRevision(String key, String revisionId, String absentMessage) {
         if (!hasText(revisionId)) {
             throw new ConfigurationException("CONFIGURATION_NOT_READY", 409, absentMessage);
@@ -93,6 +177,18 @@ public class DatasourceCatalog {
         } catch (Exception ex) {
             throw new ConfigurationException("CONFIGURATION_UNAVAILABLE", 503, "数据源配置无法读取");
         }
+    }
+
+    private DatasourceRevision revisionFor(String key, String revisionId) {
+        requireKey(key);
+        if (!hasText(revisionId)) {
+            throw new ConfigurationException("CONFIGURATION_NOT_READY", 409, "数据源尚无待检测修订");
+        }
+        DatasourceRevision revision = mapper.findRevision(revisionId);
+        if (revision == null || !key.equals(revision.datasourceKey())) {
+            throw new ConfigurationException("CONFIGURATION_NOT_FOUND", 404, "数据源修订不存在");
+        }
+        return revision;
     }
 
     private DatasourceRow requireCatalog(String key) {

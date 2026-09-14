@@ -56,3 +56,28 @@ CREATE TABLE IF NOT EXISTS int_configuration_audit (
     PRIMARY KEY (id),
     UNIQUE KEY uk_configuration_audit_operation (resource_type, resource_key, action, operation_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='Safe configuration-operation audit trail';
+
+-- Navigation and granular permissions. This is idempotent and does not grant the permissions to roles.
+SET @integration_datasource_root := (
+    SELECT menu_id FROM sys_menu WHERE parent_id = 0 AND path = 'integration' AND menu_type = 'M' ORDER BY menu_id LIMIT 1
+);
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '数据源管理', @integration_datasource_root, 1, 'datasource', 'integration/datasource/index', '', '', 1, 0, 'C', '0', '0', 'integration:datasource:list', 'database', 'admin', NOW(), '', NULL, '受管数据源配置、检测与启用'
+WHERE @integration_datasource_root IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM sys_menu WHERE parent_id = @integration_datasource_root AND path = 'datasource' AND menu_type = 'C'
+);
+SET @integration_datasource_menu := (
+    SELECT menu_id FROM sys_menu WHERE parent_id = @integration_datasource_root AND path = 'datasource' AND menu_type = 'C' ORDER BY menu_id LIMIT 1
+);
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '查看数据源', @integration_datasource_menu, 1, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:datasource:view', '#', 'admin', NOW(), '', NULL, ''
+WHERE @integration_datasource_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:datasource:view');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '编辑数据源', @integration_datasource_menu, 2, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:datasource:edit', '#', 'admin', NOW(), '', NULL, ''
+WHERE @integration_datasource_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:datasource:edit');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '检测数据源', @integration_datasource_menu, 3, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:datasource:test', '#', 'admin', NOW(), '', NULL, ''
+WHERE @integration_datasource_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:datasource:test');
+INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '启停数据源', @integration_datasource_menu, 4, '#', '', '', '', 1, 0, 'F', '0', '0', 'integration:datasource:activate', '#', 'admin', NOW(), '', NULL, ''
+WHERE @integration_datasource_menu IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys_menu WHERE perms = 'integration:datasource:activate');

@@ -20,13 +20,34 @@
             <arg column="checksum" javaType="java.lang.String" />
         </constructor>
     </resultMap>
+    <resultMap id="Secret" type="com.ruoyi.integration.datasource.catalog.DatasourceSecretRow">
+        <constructor>
+            <idArg column="secret_id" javaType="java.lang.String" />
+            <arg column="key_id" javaType="java.lang.String" />
+            <arg column="nonce" javaType="[B" jdbcType="BINARY" />
+            <arg column="ciphertext" javaType="[B" jdbcType="BLOB" />
+            <arg column="owner_key" javaType="java.lang.String" />
+            <arg column="owner_revision" javaType="java.lang.String" />
+        </constructor>
+    </resultMap>
     <select id="findCatalog" resultMap="Catalog">
         SELECT datasource_key, datasource_name, enabled, active_revision_id, draft_revision_id, row_version
         FROM int_datasource_config WHERE datasource_key = #{datasourceKey}
     </select>
+    <select id="listCatalog" resultMap="Catalog">
+        SELECT datasource_key, datasource_name, enabled, active_revision_id, draft_revision_id, row_version
+        FROM int_datasource_config ORDER BY datasource_key ASC
+    </select>
     <select id="findRevision" resultMap="Revision">
         SELECT revision_id, datasource_key, config_json, secret_id, checksum
         FROM int_datasource_revision WHERE revision_id = #{revisionId}
+    </select>
+    <select id="findLastTest" resultType="java.lang.String">
+        SELECT last_test_json FROM int_datasource_revision WHERE revision_id = #{revisionId}
+    </select>
+    <select id="findSecret" resultMap="Secret">
+        SELECT secret_id, key_id, nonce, ciphertext, owner_key, owner_revision
+        FROM int_datasource_secret WHERE secret_id = #{secretId}
     </select>
     <insert id="insertCatalog">
         INSERT INTO int_datasource_config (datasource_key, datasource_name, enabled, active_revision_id, draft_revision_id, row_version)
@@ -36,9 +57,36 @@
         INSERT INTO int_datasource_revision (revision_id, datasource_key, config_json, secret_id, checksum, create_time)
         VALUES (#{revisionId}, #{datasourceKey}, #{configJson}, #{secretId}, #{checksum}, NOW())
     </insert>
+    <insert id="insertSecret">
+        INSERT INTO int_datasource_secret (secret_id, key_id, nonce, ciphertext, owner_key, owner_revision, create_time)
+        VALUES (#{secretId}, #{keyId}, #{nonce}, #{ciphertext}, #{ownerKey}, #{ownerRevision}, NOW())
+    </insert>
+    <update id="updateLastTest">
+        UPDATE int_datasource_revision SET last_test_json = #{lastTestJson}
+        WHERE revision_id = #{revisionId}
+    </update>
     <update id="updateDraftPointer">
         UPDATE int_datasource_config
         SET draft_revision_id = #{draftRevisionId}, row_version = row_version + 1
         WHERE datasource_key = #{datasourceKey} AND row_version = #{expectedRowVersion}
+    </update>
+    <update id="activatePointer">
+        UPDATE int_datasource_config
+        SET active_revision_id = #{activeRevisionId}, draft_revision_id = NULL, enabled = 1,
+            row_version = row_version + 1
+        WHERE datasource_key = #{datasourceKey}
+        <choose>
+            <when test="expectedActiveId == null or expectedActiveId == ''">
+                AND active_revision_id IS NULL
+            </when>
+            <otherwise>
+                AND active_revision_id = #{expectedActiveId}
+            </otherwise>
+        </choose>
+    </update>
+    <update id="disable">
+        UPDATE int_datasource_config
+        SET enabled = 0, row_version = row_version + 1
+        WHERE datasource_key = #{datasourceKey}
     </update>
 </mapper>

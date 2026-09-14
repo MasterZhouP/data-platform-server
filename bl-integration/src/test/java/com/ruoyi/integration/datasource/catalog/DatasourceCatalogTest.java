@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -47,5 +48,34 @@ class DatasourceCatalogTest {
                 () -> catalog.saveDraft("u8", "2", json.createObjectNode().put("name", "U8"), "secret-3"));
 
         assertEquals("CONFIGURATION_VERSION_CONFLICT", error.code());
+    }
+
+    @Test
+    void listsConfigurationsAndDisablesTheRequestedDatasource() {
+        DatasourceMapper mapper = mock(DatasourceMapper.class);
+        DatasourceRow row = new DatasourceRow("oa", "OA 测试库", true, "active-1", null, 3L);
+        when(mapper.listCatalog()).thenReturn(java.util.List.of(row));
+        when(mapper.disable("oa")).thenReturn(1);
+        DatasourceCatalog catalog = new DatasourceCatalog(mapper, json);
+
+        assertEquals(java.util.List.of(row), catalog.list());
+        assertTrue(catalog.disable("oa"));
+        verify(mapper).disable("oa");
+    }
+
+    @Test
+    void keepsOnlyTheSafeProbeSummaryOnTheTestedRevision() {
+        DatasourceMapper mapper = mock(DatasourceMapper.class);
+        DatasourceRevision revision = new DatasourceRevision("draft-1", "u8", "{}", "secret-1", "checksum");
+        ObjectNode safeResult = json.createObjectNode().put("status", "SUCCESS").put("durationMs", 15);
+        when(mapper.findRevision("draft-1")).thenReturn(revision);
+        when(mapper.updateLastTest(eq("draft-1"), any())).thenReturn(1);
+        when(mapper.findLastTest("draft-1")).thenReturn("{\"status\":\"SUCCESS\",\"durationMs\":15}");
+        DatasourceCatalog catalog = new DatasourceCatalog(mapper, json);
+
+        catalog.recordTest("u8", new RevisionToken("draft-1"), safeResult);
+
+        assertEquals("SUCCESS", catalog.lastTest("u8", "draft-1").path("status").asText());
+        verify(mapper).updateLastTest(eq("draft-1"), any());
     }
 }
