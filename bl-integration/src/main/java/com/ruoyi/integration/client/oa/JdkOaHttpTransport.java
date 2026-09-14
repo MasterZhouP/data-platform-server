@@ -10,19 +10,27 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public class JdkOaHttpTransport implements OaHttpTransport
 {
-    private final OaRestProperties properties;
+    private final OaRestSettings settings;
     private final HttpClient client;
 
+    @Autowired
     public JdkOaHttpTransport(OaRestProperties properties)
     {
-        this.properties = properties;
+        this(properties.snapshot());
+    }
+
+    public JdkOaHttpTransport(OaRestSettings settings)
+    {
+        this.settings = settings;
         this.client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
+                .connectTimeout(Duration.ofMillis(settings.connectTimeoutMillis()))
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
     }
 
@@ -30,8 +38,8 @@ public class JdkOaHttpTransport implements OaHttpTransport
     public OaHttpResponse exchange(OaHttpRequest request)
     {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(URI.create(trimSlash(properties.getBaseUrl()) + request.path()))
-                .timeout(Duration.ofMillis(properties.getReadTimeoutMillis()))
+                .uri(URI.create(trimSlash(settings.baseUrl()) + request.path()))
+                .timeout(Duration.ofMillis(settings.readTimeoutMillis()))
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json;charset=UTF-8");
         request.headers().forEach(builder::header);

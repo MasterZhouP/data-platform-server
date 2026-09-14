@@ -7,10 +7,10 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "integration.oa")
 public class OaRestProperties
 {
-    private String baseUrl = "http://221.215.114.30:8081";
+    private String baseUrl;
     private String username;
     private String password;
-    private String loginName = "bladmin";
+    private String loginName;
     private int connectTimeoutMillis = 5000;
     private int readTimeoutMillis = 15000;
 
@@ -26,4 +26,5 @@ public class OaRestProperties
     public void setConnectTimeoutMillis(int connectTimeoutMillis) { this.connectTimeoutMillis = connectTimeoutMillis; }
     public int getReadTimeoutMillis() { return readTimeoutMillis; }
     public void setReadTimeoutMillis(int readTimeoutMillis) { this.readTimeoutMillis = readTimeoutMillis; }
+    public OaRestSettings snapshot() { return new OaRestSettings(baseUrl, username, password, loginName, connectTimeoutMillis, readTimeoutMillis); }
 }

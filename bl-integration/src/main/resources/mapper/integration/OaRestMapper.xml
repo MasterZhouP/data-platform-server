@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.client.oa.config.OaRestMapper">
+    <resultMap id="Connection" type="com.ruoyi.integration.client.oa.config.OaRestConnection"><constructor>
+        <idArg column="connection_key" javaType="java.lang.String"/><arg column="connection_name" javaType="java.lang.String"/>
+        <arg column="enabled" javaType="_boolean"/><arg column="active_revision_id" javaType="java.lang.String"/>
+        <arg column="draft_revision_id" javaType="java.lang.String"/><arg column="row_version" javaType="_long"/>
+        <arg column="target_id" javaType="java.lang.String"/>
+    </constructor></resultMap>
+    <resultMap id="Revision" type="com.ruoyi.integration.client.oa.config.OaRestRevision"><constructor>
+        <idArg column="revision_id" javaType="java.lang.String"/><arg column="connection_key" javaType="java.lang.String"/>
+        <arg column="target_id" javaType="java.lang.String"/><arg column="environment" javaType="java.lang.String"/>
+        <arg column="base_url" javaType="java.lang.String"/><arg column="rest_username" javaType="java.lang.String"/>
+        <arg column="login_name" javaType="java.lang.String"/><arg column="connect_timeout_ms" javaType="_int"/>
+        <arg column="read_timeout_ms" javaType="_int"/><arg column="secret_id" javaType="java.lang.String"/>
+        <arg column="checksum" javaType="java.lang.String"/>
+    </constructor></resultMap>
+    <resultMap id="Secret" type="com.ruoyi.integration.client.oa.config.OaRestSecret"><constructor>
+        <idArg column="secret_id" javaType="java.lang.String"/><arg column="key_id" javaType="java.lang.String"/>
+        <arg column="nonce" javaType="[B" jdbcType="BINARY"/><arg column="ciphertext" javaType="[B" jdbcType="BLOB"/>
+        <arg column="owner_key" javaType="java.lang.String"/><arg column="owner_revision" javaType="java.lang.String"/>
+    </constructor></resultMap>
+    <select id="findConnection" resultMap="Connection">SELECT connection_key, connection_name, enabled, active_revision_id, draft_revision_id, row_version, target_id FROM int_oa_rest_connection WHERE connection_key = #{connectionKey}</select>
+    <select id="listConnections" resultMap="Connection">SELECT connection_key, connection_name, enabled, active_revision_id, draft_revision_id, row_version, target_id FROM int_oa_rest_connection ORDER BY connection_key ASC</select>
+    <select id="findRevision" resultMap="Revision">SELECT revision_id, connection_key, target_id, environment, base_url, rest_username, login_name, connect_timeout_ms, read_timeout_ms, secret_id, checksum FROM int_oa_rest_revision WHERE revision_id = #{revisionId}</select>
+    <select id="findSecret" resultMap="Secret">SELECT secret_id, key_id, nonce, ciphertext, owner_key, owner_revision FROM int_oa_rest_secret WHERE secret_id = #{secretId}</select>
+    <select id="findLastTest" resultType="java.lang.String">SELECT last_test_json FROM int_oa_rest_revision WHERE revision_id = #{revisionId}</select>
+    <insert id="insertConnection">INSERT INTO int_oa_rest_connection (connection_key, connection_name, enabled, active_revision_id, draft_revision_id, row_version, target_id) VALUES (#{connectionKey}, #{connectionName}, #{enabled}, #{activeRevisionId}, #{draftRevisionId}, #{rowVersion}, #{targetId})</insert>
+    <insert id="insertRevision">INSERT INTO int_oa_rest_revision (revision_id, connection_key, target_id, environment, base_url, rest_username, login_name, connect_timeout_ms, read_timeout_ms, secret_id, checksum, create_time) VALUES (#{revisionId}, #{connectionKey}, #{targetId}, #{environment}, #{baseUrl}, #{restUsername}, #{loginName}, #{connectTimeoutMs}, #{readTimeoutMs}, #{secretId}, #{checksum}, NOW())</insert>
+    <insert id="insertSecret">INSERT INTO int_oa_rest_secret (secret_id, key_id, nonce, ciphertext, owner_key, owner_revision, create_time) VALUES (#{secretId}, #{keyId}, #{nonce}, #{ciphertext}, #{ownerKey}, #{ownerRevision}, NOW())</insert>
+    <update id="updateLastTest">UPDATE int_oa_rest_revision SET last_test_json = #{lastTestJson} WHERE revision_id = #{revisionId}</update>
+    <update id="updateDraftPointer">UPDATE int_oa_rest_connection SET draft_revision_id = #{draftRevisionId}, row_version = row_version + 1 WHERE connection_key = #{connectionKey} AND row_version = #{expectedRowVersion}</update>
+    <update id="activatePointer">UPDATE int_oa_rest_connection SET active_revision_id = #{activeRevisionId}, draft_revision_id = NULL, enabled = 1, row_version = row_version + 1 WHERE connection_key = #{connectionKey}<choose><when test="expectedActiveId == null or expectedActiveId == ''"> AND active_revision_id IS NULL</when><otherwise> AND active_revision_id = #{expectedActiveId}</otherwise></choose></update>
+    <update id="disable">UPDATE int_oa_rest_connection SET enabled = 0, row_version = row_version + 1 WHERE connection_key = #{connectionKey}</update>
+</mapper>
