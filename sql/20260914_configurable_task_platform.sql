@@ -1,6 +1,70 @@
 -- 可配置任务平台：任务身份与不可变修订。
 -- 本脚本只新增对象，可重复执行；不修改现有参照、定时同步或执行记录数据。
 
+-- 执行快照与后处理检查点。沿用旧迁移的 information_schema 守卫，兼容 MySQL 5.7/8.0 并支持重复执行。
+SET @int_execution_task_revision_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_execution' AND COLUMN_NAME = 'task_revision_id'),
+    'SELECT 1',
+    'ALTER TABLE int_execution ADD COLUMN task_revision_id BIGINT DEFAULT NULL COMMENT ''受理时锁定的任务修订'' AFTER task_code'
+);
+PREPARE int_execution_task_revision_stmt FROM @int_execution_task_revision_ddl;
+EXECUTE int_execution_task_revision_stmt;
+DEALLOCATE PREPARE int_execution_task_revision_stmt;
+
+SET @int_execution_task_checksum_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_execution' AND COLUMN_NAME = 'task_checksum'),
+    'SELECT 1',
+    'ALTER TABLE int_execution ADD COLUMN task_checksum CHAR(64) DEFAULT NULL COMMENT ''锁定修订校验和'' AFTER task_revision_id'
+);
+PREPARE int_execution_task_checksum_stmt FROM @int_execution_task_checksum_ddl;
+EXECUTE int_execution_task_checksum_stmt;
+DEALLOCATE PREPARE int_execution_task_checksum_stmt;
+
+SET @int_execution_dependency_snapshot_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_execution' AND COLUMN_NAME = 'dependency_snapshot_json'),
+    'SELECT 1',
+    'ALTER TABLE int_execution ADD COLUMN dependency_snapshot_json LONGTEXT DEFAULT NULL COMMENT ''受理时依赖快照'' AFTER task_checksum'
+);
+PREPARE int_execution_dependency_snapshot_stmt FROM @int_execution_dependency_snapshot_ddl;
+EXECUTE int_execution_dependency_snapshot_stmt;
+DEALLOCATE PREPARE int_execution_dependency_snapshot_stmt;
+
+SET @int_execution_last_stage_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_execution' AND COLUMN_NAME = 'last_completed_stage'),
+    'SELECT 1',
+    'ALTER TABLE int_execution ADD COLUMN last_completed_stage VARCHAR(100) DEFAULT NULL COMMENT ''最后完成检查点'' AFTER stage'
+);
+PREPARE int_execution_last_stage_stmt FROM @int_execution_last_stage_ddl;
+EXECUTE int_execution_last_stage_stmt;
+DEALLOCATE PREPARE int_execution_last_stage_stmt;
+
+SET @int_execution_u8_confirmed_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_execution' AND COLUMN_NAME = 'u8_confirmed'),
+    'SELECT 1',
+    'ALTER TABLE int_execution ADD COLUMN u8_confirmed TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''U8业务是否已确认成功'' AFTER last_completed_stage'
+);
+PREPARE int_execution_u8_confirmed_stmt FROM @int_execution_u8_confirmed_ddl;
+EXECUTE int_execution_u8_confirmed_stmt;
+DEALLOCATE PREPARE int_execution_u8_confirmed_stmt;
+
+SET @int_execution_resume_mode_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_execution' AND COLUMN_NAME = 'resume_mode'),
+    'SELECT 1',
+    'ALTER TABLE int_execution ADD COLUMN resume_mode VARCHAR(20) NOT NULL DEFAULT ''FULL'' COMMENT ''FULL/POST_PROCESS'' AFTER u8_confirmed'
+);
+PREPARE int_execution_resume_mode_stmt FROM @int_execution_resume_mode_ddl;
+EXECUTE int_execution_resume_mode_stmt;
+DEALLOCATE PREPARE int_execution_resume_mode_stmt;
+
+SET @int_execution_result_outputs_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_execution' AND COLUMN_NAME = 'result_outputs_json'),
+    'SELECT 1',
+    'ALTER TABLE int_execution ADD COLUMN result_outputs_json LONGTEXT DEFAULT NULL COMMENT ''U8确认及后处理输出快照'' AFTER resume_mode'
+);
+PREPARE int_execution_result_outputs_stmt FROM @int_execution_result_outputs_ddl;
+EXECUTE int_execution_result_outputs_stmt;
+DEALLOCATE PREPARE int_execution_result_outputs_stmt;
+
 CREATE TABLE IF NOT EXISTS int_integration_task (
     task_code          VARCHAR(100) COLLATE utf8mb4_bin NOT NULL COMMENT '稳定任务编码，大小写敏感',
     task_name          VARCHAR(100) NOT NULL COMMENT '任务名称',

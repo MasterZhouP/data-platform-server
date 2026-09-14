@@ -5,6 +5,7 @@ import java.util.List;
 import com.ruoyi.integration.execution.domain.IntegrationExecution;
 import org.apache.ibatis.annotations.Param;
 
+/** MyBatis 执行记录映射，供统一执行骨架持久化受理快照与终态。 */
 public interface IntegrationExecutionMapper
 {
     int insertExecution(IntegrationExecution execution);
@@ -39,6 +40,13 @@ public interface IntegrationExecutionMapper
 
     int markResultUnknown(@Param("executionId") Long executionId, @Param("errorCode") String errorCode,
             @Param("errorMessage") String errorMessage, @Param("endTime") Date endTime);
+
+    int checkpointU8Confirmed(@Param("executionId") Long executionId, @Param("resultOutputsJson") String resultOutputsJson,
+            @Param("lastCompletedStage") String lastCompletedStage, @Param("updateTime") Date updateTime);
+
+    int markPartialSuccess(@Param("executionId") Long executionId, @Param("errorCode") String errorCode,
+            @Param("errorMessage") String errorMessage, @Param("lastCompletedStage") String lastCompletedStage,
+            @Param("resultOutputsJson") String resultOutputsJson, @Param("endTime") Date endTime);
 
     int failStaleRunning(@Param("staleBefore") Date staleBefore,
             @Param("beforeSendCode") String beforeSendCode, @Param("afterSendCode") String afterSendCode);

@@ -175,6 +175,26 @@ class IntegrationExecutionFlowTest
     }
 
     @Test
+    void confirmedU8WithIncompletePostProcessRetriesOnlyFromTheSavedCheckpoint()
+    {
+        AcceptanceResult first = service.accept(new TriggerCommand("TEST_PUSH", "M-450", null, null));
+        repository.claimPending(first.executionId(), new Date());
+        repository.checkpointU8Confirmed(first.executionId(), "{\"voucherNo\":\"记-001\"}", "U8_CONFIRMED");
+        repository.markPartialSuccess(first.executionId(), "RESULT_NOT_READY", "凭证结果尚未落库",
+                "RESULT_VOUCHER_ATTEMPT_3", "{\"voucherNo\":\"记-001\"}", new Date());
+
+        AcceptanceResult retry = service.retry(first.executionId());
+
+        IntegrationExecution child = repository.findById(retry.executionId());
+        assertEquals(ExecutionStatus.PARTIAL_SUCCESS.name(), repository.findById(first.executionId()).getStatus());
+        assertEquals("POST_PROCESS", child.getResumeMode());
+        assertTrue(child.getU8Confirmed());
+        assertEquals("RESULT_VOUCHER_ATTEMPT_3", child.getLastCompletedStage());
+        assertEquals("{\"voucherNo\":\"记-001\"}", child.getResultOutputsJson());
+        assertThrows(RetryRejectedException.class, () -> service.retry(first.executionId()));
+    }
+
+    @Test
     void rejectedExecutorLeavesExecutionPendingForLaterScan()
     {
         AcceptanceResult accepted = service.accept(new TriggerCommand("TEST_PUSH", "M-500", null, null));
@@ -414,6 +434,32 @@ class IntegrationExecutionFlowTest
             value.setErrorMessage(errorMessage);
             value.setRetryable(false);
             value.setResultUnknown(true);
+            value.setEndTime(endTime);
+        }
+
+        @Override
+        public synchronized void checkpointU8Confirmed(Long executionId, String resultOutputsJson, String lastCompletedStage)
+        {
+            IntegrationExecution value = executions.get(executionId);
+            value.setU8Confirmed(true);
+            value.setResultOutputsJson(resultOutputsJson);
+            value.setLastCompletedStage(lastCompletedStage);
+            value.setStage(lastCompletedStage);
+        }
+
+        @Override
+        public synchronized void markPartialSuccess(Long executionId, String errorCode, String errorMessage,
+                String lastCompletedStage, String resultOutputsJson, Date endTime)
+        {
+            IntegrationExecution value = executions.get(executionId);
+            value.setStatus(ExecutionStatus.PARTIAL_SUCCESS.name());
+            value.setErrorCode(errorCode);
+            value.setErrorMessage(errorMessage);
+            value.setLastCompletedStage(lastCompletedStage);
+            value.setResultOutputsJson(resultOutputsJson);
+            value.setStage(lastCompletedStage);
+            value.setRetryable(true);
+            value.setResultUnknown(false);
             value.setEndTime(endTime);
         }
 

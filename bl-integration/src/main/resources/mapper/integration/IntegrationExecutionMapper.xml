@@ -5,6 +5,9 @@
     <resultMap id="ExecutionResult" type="com.ruoyi.integration.execution.domain.IntegrationExecution">
         <id property="executionId" column="execution_id" />
         <result property="taskCode" column="task_code" />
+        <result property="taskRevisionId" column="task_revision_id" />
+        <result property="taskChecksum" column="task_checksum" />
+        <result property="dependencySnapshot" column="dependency_snapshot_json" />
         <result property="masterId" column="master_id" />
         <result property="businessKey" column="business_key" />
         <result property="formId" column="form_id" />
@@ -18,6 +21,10 @@
         <result property="resultUnknown" column="result_unknown" />
         <result property="retryCount" column="retry_count" />
         <result property="retryOfExecutionId" column="retry_of_execution_id" />
+        <result property="lastCompletedStage" column="last_completed_stage" />
+        <result property="u8Confirmed" column="u8_confirmed" />
+        <result property="resumeMode" column="resume_mode" />
+        <result property="resultOutputsJson" column="result_outputs_json" />
         <result property="dedupKey" column="dedup_key" />
         <result property="triggerPayload" column="trigger_payload" />
         <result property="requestPayload" column="request_payload" />
@@ -31,28 +38,32 @@
     </resultMap>
 
     <sql id="executionColumns">
-        execution_id, task_code, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag,
+        execution_id, task_code, task_revision_id, task_checksum, dependency_snapshot_json, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag,
         status, stage, retryable, result_unknown, retry_count, retry_of_execution_id,
+        last_completed_stage, u8_confirmed, resume_mode, result_outputs_json,
         dedup_key, trigger_payload, request_payload, response_payload, error_code,
         error_message, start_time, end_time, create_time, update_time
     </sql>
 
     <sql id="executionListColumns">
-        execution_id, task_code, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag,
+        execution_id, task_code, task_revision_id, task_checksum, dependency_snapshot_json, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag,
         status, stage, retryable, result_unknown, retry_count, retry_of_execution_id,
+        last_completed_stage, u8_confirmed, resume_mode, result_outputs_json,
         error_code, error_message, start_time, end_time, create_time, update_time
     </sql>
 
     <insert id="insertExecution" parameterType="com.ruoyi.integration.execution.domain.IntegrationExecution"
             useGeneratedKeys="true" keyProperty="executionId">
         INSERT INTO int_execution (
-            task_code, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag, status, stage,
+            task_code, task_revision_id, task_checksum, dependency_snapshot_json, master_id, business_key, form_id, summary_id, operation, trigger_source, force_flag, status, stage,
             retryable, result_unknown, retry_count, retry_of_execution_id, dedup_key,
+            last_completed_stage, u8_confirmed, resume_mode, result_outputs_json,
             trigger_payload, request_payload, response_payload, error_code, error_message,
             start_time, end_time, create_time, update_time
         ) VALUES (
-            #{taskCode}, #{masterId}, #{businessKey}, #{formId}, #{summaryId}, #{operation}, #{triggerSource}, #{force}, #{status}, #{stage},
+            #{taskCode}, #{taskRevisionId}, #{taskChecksum}, #{dependencySnapshot}, #{masterId}, #{businessKey}, #{formId}, #{summaryId}, #{operation}, #{triggerSource}, #{force}, #{status}, #{stage},
             #{retryable}, #{resultUnknown}, #{retryCount}, #{retryOfExecutionId}, #{dedupKey},
+            #{lastCompletedStage}, #{u8Confirmed}, #{resumeMode}, #{resultOutputsJson},
             #{triggerPayload}, #{requestPayload}, #{responsePayload}, #{errorCode}, #{errorMessage},
             #{startTime}, #{endTime}, #{createTime}, #{updateTime}
         )
@@ -152,6 +163,22 @@
             error_code = #{errorCode}, error_message = #{errorMessage},
             end_time = #{endTime}, update_time = #{endTime}
         WHERE execution_id = #{executionId} AND status = 'RUNNING'
+    </update>
+
+    <!-- U8 成功输出必须与检查点一并落库，进程中断后才能避免再次提交同一张单据。 -->
+    <update id="checkpointU8Confirmed">
+        UPDATE int_execution
+        SET u8_confirmed = 1, result_outputs_json = #{resultOutputsJson},
+            last_completed_stage = #{lastCompletedStage}, stage = #{lastCompletedStage}, update_time = #{updateTime}
+        WHERE execution_id = #{executionId} AND status = 'RUNNING'
+    </update>
+
+    <update id="markPartialSuccess">
+        UPDATE int_execution
+        SET status = 'PARTIAL_SUCCESS', stage = #{lastCompletedStage}, last_completed_stage = #{lastCompletedStage},
+            result_outputs_json = #{resultOutputsJson}, retryable = 1, result_unknown = 0,
+            error_code = #{errorCode}, error_message = #{errorMessage}, end_time = #{endTime}, update_time = #{endTime}
+        WHERE execution_id = #{executionId} AND status = 'RUNNING' AND u8_confirmed = 1
     </update>
 
     <update id="failStaleRunning">

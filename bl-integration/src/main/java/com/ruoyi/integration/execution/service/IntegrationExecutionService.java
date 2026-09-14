@@ -16,6 +16,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 统一受理执行请求并创建不可变执行记录。
+ * <p>
+ * 重试从原记录复制任务版本与检查点，而不是重新读取当前配置；这样任务管理员发布新版本也不会改变在途单据的处理语义。
+ * </p>
+ */
 @Service
 public class IntegrationExecutionService implements ExecutionAcceptor
 {
@@ -74,6 +80,12 @@ public class IntegrationExecutionService implements ExecutionAcceptor
         child.setBusinessKey(original.getBusinessKey());
         child.setRetryCount(valueOrZero(original.getRetryCount()) + 1);
         child.setRetryOfExecutionId(original.getExecutionId());
+        copyExecutionSnapshot(original, child);
+        // U8 已确认的部分成功记录要保留原记录的去重键，阻止新的完整推送；子记录不占该键，只续跑后处理。
+        if (ExecutionStatus.PARTIAL_SUCCESS.name().equals(original.getStatus()))
+        {
+            child.setDedupKey(null);
+        }
         try
         {
             repository.insert(child);
@@ -128,6 +140,8 @@ public class IntegrationExecutionService implements ExecutionAcceptor
         execution.setResultUnknown(false);
         execution.setRetryCount(0);
         execution.setDedupKey(dedupKey);
+        execution.setU8Confirmed(false);
+        execution.setResumeMode("FULL");
         execution.setTriggerPayload(masker.mask(JSON.toJSONString(command)));
         execution.setCreateTime(new Date());
         execution.setUpdateTime(new Date());
@@ -186,6 +200,10 @@ public class IntegrationExecutionService implements ExecutionAcceptor
         {
             return "外部处理结果未知，请先核对目标系统实际结果";
         }
+        if (ExecutionStatus.PARTIAL_SUCCESS.name().equals(execution.getStatus()))
+        {
+            return Boolean.TRUE.equals(execution.getU8Confirmed()) ? null : "部分成功记录缺少U8确认检查点";
+        }
         if (!ExecutionStatus.FAILED.name().equals(execution.getStatus()))
         {
             return "只有失败记录可以重试";
@@ -195,6 +213,23 @@ public class IntegrationExecutionService implements ExecutionAcceptor
             return "该失败不允许安全重试";
         }
         return null;
+    }
+
+    /**
+     * 对配置型任务，下面字段就是受理时固定的执行合同；子重试必须继续使用它们，不能改用最新发布的任务修订。
+     */
+    private void copyExecutionSnapshot(IntegrationExecution source, IntegrationExecution target)
+    {
+        target.setTaskRevisionId(source.getTaskRevisionId());
+        target.setTaskChecksum(source.getTaskChecksum());
+        target.setDependencySnapshot(source.getDependencySnapshot());
+        target.setLastCompletedStage(source.getLastCompletedStage());
+        target.setU8Confirmed(source.getU8Confirmed());
+        target.setResultOutputsJson(source.getResultOutputsJson());
+        if (ExecutionStatus.PARTIAL_SUCCESS.name().equals(source.getStatus()))
+        {
+            target.setResumeMode("POST_PROCESS");
+        }
     }
 
     private int valueOrZero(Integer value)

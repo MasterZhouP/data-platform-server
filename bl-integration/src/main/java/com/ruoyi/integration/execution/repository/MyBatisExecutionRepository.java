@@ -11,6 +11,9 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 使用同一事务写入执行主记录和检查点，确保“已确认 U8 成功”不会只存在于进程内存中。
+ */
 @Repository
 public class MyBatisExecutionRepository implements ExecutionRepository
 {
@@ -132,6 +135,21 @@ public class MyBatisExecutionRepository implements ExecutionRepository
     public void markResultUnknown(Long executionId, String errorCode, String errorMessage, Date endTime)
     {
         executionMapper.markResultUnknown(executionId, errorCode, errorMessage, endTime);
+    }
+
+    @Override
+    @Transactional
+    public void checkpointU8Confirmed(Long executionId, String resultOutputsJson, String lastCompletedStage)
+    {
+        executionMapper.checkpointU8Confirmed(executionId, resultOutputsJson, lastCompletedStage, new Date());
+    }
+
+    @Override
+    @Transactional
+    public void markPartialSuccess(Long executionId, String errorCode, String errorMessage,
+            String lastCompletedStage, String resultOutputsJson, Date endTime)
+    {
+        executionMapper.markPartialSuccess(executionId, errorCode, errorMessage, lastCompletedStage, resultOutputsJson, endTime);
     }
 
     @Override
