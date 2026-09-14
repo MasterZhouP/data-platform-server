@@ -357,11 +357,11 @@ git commit -m "feat: add controlled U8 JSON template processing"
 
 ```java
 @Test
-void obtainsOneTokenAndTradeIdForTwoBusinessCalls() {
+void reusesOneAccountTokenButObtainsATradeIdForEachBusinessCall() {
     gateway.postBusiness("VOUCHER_ADD", "/api/voucher/add", payload);
     gateway.postBusiness("VOUCHER_ADD", "/api/voucher/add", payload);
     assertEquals(1, server.requestCount("/system/token"));
-    assertEquals(1, server.requestCount("/system/tradeid"));
+    assertEquals(2, server.requestCount("/system/tradeid"));
 }
 
 @Test
@@ -386,7 +386,7 @@ public interface U8Gateway {
 }
 ```
 
-Allow only absolute paths from a configured allow-list keyed by `operationCode`; reject a host, query string, header or credential supplied from task JSON. Cache token and trade ID with their expiry/short TTL; refresh once on an authentication rejection; classify connect failures before request as `PRE_SEND_FAILURE`, response timeout/connection loss after write as `RESULT_UNKNOWN`, HTTP/non-zero U8 rejection as `BUSINESS_FAILURE`, and confirmed responses as `SUCCESS`. Mask account/token values before errors or stage payloads.
+Allow only absolute paths from a configured allow-list keyed by `operationCode`; reject a host, query string, header or credential supplied from task JSON. Cache the shared account token with its expiry/short TTL, but obtain a new `tradeId` for every actual business post because it is a transaction-unique identifier; refresh the token once on an authentication rejection. Classify connect failures before request as `PRE_SEND_FAILURE`, response timeout/connection loss after write as `RESULT_UNKNOWN`, HTTP/non-zero U8 rejection as `BUSINESS_FAILURE`, and confirmed responses as `SUCCESS`. Mask account/token values before errors or stage payloads.
 
 - [ ] **Step 4: Run the gateway tests**
 
