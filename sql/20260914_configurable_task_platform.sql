@@ -95,3 +95,66 @@ CREATE TABLE IF NOT EXISTS int_integration_task_revision (
     UNIQUE KEY uk_int_task_revision_no (task_code, revision_no),
     KEY idx_int_task_revision_status (task_code, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='集成任务不可变修订';
+
+-- 参照任务的 SQL 从此由配置版本保存，不再让生产执行按类路径资源选择 SQL 文件。
+SET @int_reference_sql_text_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task')
+    AND NOT EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task' AND COLUMN_NAME = 'sql_text'),
+    'ALTER TABLE int_reference_task ADD COLUMN sql_text LONGTEXT DEFAULT NULL COMMENT ''已发布参照 SQL 文本'' AFTER datasource_key',
+    'SELECT 1'
+);
+PREPARE int_reference_sql_text_stmt FROM @int_reference_sql_text_ddl;
+EXECUTE int_reference_sql_text_stmt;
+DEALLOCATE PREPARE int_reference_sql_text_stmt;
+
+-- 保留旧列仅作为升级来源，改为可空后新建/编辑任务不会再写入资源路径。
+SET @int_reference_sql_resource_nullable_ddl := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task' AND COLUMN_NAME = 'sql_resource' AND IS_NULLABLE = 'NO'),
+    'ALTER TABLE int_reference_task MODIFY COLUMN sql_resource VARCHAR(255) NULL COMMENT ''仅供旧版本迁移来源，不再用于运行''',
+    'SELECT 1'
+);
+PREPARE int_reference_sql_resource_nullable_stmt FROM @int_reference_sql_resource_nullable_ddl;
+EXECUTE int_reference_sql_resource_nullable_stmt;
+DEALLOCATE PREPARE int_reference_sql_resource_nullable_stmt;
+
+SET @int_reference_material_sql := 'SELECT *
+FROM (
+    SELECT
+        ch.iinvweight jz,
+        ch.cComUnitCode zdwbm,
+        ch.cSTComUnitCode fdwbm,
+        ch.cInvCode,
+        cInvName,
+        cInvStd,
+        zdw.cComUnitName zdw,
+        fdw.cComUnitName fdw,
+        CAST ((CASE WHEN igrouptype = 2 AND ISNULL(xcl.iNUM, 0) <> 0
+            THEN ABS(ISNULL(xcl.iQuantity, 0)) / ABS(ISNULL(xcl.iNUM, 1))
+            ELSE ISNULL(ComputationUnit2.iChangRate, 0) END) AS DECIMAL(20, 6)) hsl,
+        cInvDefine2 zldj,
+        ch.iMassDate,
+        chdl.cInvCName chdl,
+        ch.cAddress cd,
+        cInvDefine4 mrscbm
+    FROM Inventory ch
+    LEFT JOIN ComputationUnit zdw ON ch.cComUnitCode = zdw.cComunitCode
+    LEFT JOIN ComputationUnit fdw ON ch.cSTComUnitCode = fdw.cComunitCode
+    LEFT JOIN ComputationUnit ComputationUnit2 ON ch.cSAComUnitCode = ComputationUnit2.cComunitCode
+    LEFT JOIN InventoryClass chdl ON chdl.cInvCCode = LEFT(ch.cInvCCode, 2)
+    LEFT JOIN CurrentStock xcl ON ch.cinvcode = xcl.cinvcode
+    GROUP BY ch.iinvweight, ch.cComUnitCode, ch.cSTComUnitCode, ch.cInvCode, cInvName, cInvStd,
+        zdw.cComUnitName, fdw.cComUnitName, cInvDefine4,
+        CAST ((CASE WHEN igrouptype = 2 AND ISNULL(xcl.iNUM, 0) <> 0
+            THEN ABS(ISNULL(xcl.iQuantity, 0)) / ABS(ISNULL(xcl.iNUM, 1))
+            ELSE ISNULL(ComputationUnit2.iChangRate, 0) END) AS DECIMAL(20, 6)),
+        cInvDefine2, ch.iMassDate, chdl.cInvCName, ch.cAddress, dEDate
+    HAVING dEDate IS NULL
+) a';
+SET @int_reference_material_seed := IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'int_reference_task' AND COLUMN_NAME = 'sql_text'),
+    'UPDATE int_reference_task SET sql_text = @int_reference_material_sql WHERE task_code = ''U8_MATERIAL_REFERENCE'' AND (sql_text IS NULL OR sql_text = '''')',
+    'SELECT 1'
+);
+PREPARE int_reference_material_seed_stmt FROM @int_reference_material_seed;
+EXECUTE int_reference_material_seed_stmt;
+DEALLOCATE PREPARE int_reference_material_seed_stmt;

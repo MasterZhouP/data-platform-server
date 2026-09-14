@@ -6,16 +6,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.ruoyi.integration.reference.model.ReferenceException;
 import com.ruoyi.integration.reference.model.ReferenceTask;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterUtils;
 import org.springframework.jdbc.core.namedparam.ParsedSql;
 import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +21,10 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.LongFunction;
 
-/** A SQL Server reference query engine. SQL is shipped as a trusted classpath resource. */
+/**
+ * SQL Server 参照查询引擎。
+ * SQL 已来自任务已发布版本的文本，运行时仍只接受一条受控只读查询，参照分页/筛选语义保持不变。
+ */
 @Component
 public class ReferenceEngine {
     private static final long BUDGET_MS = 10_000;
@@ -277,13 +277,14 @@ public class ReferenceEngine {
     }
 
     private String sql(ReferenceTask task) {
-        if (task.sqlResource() == null || !task.sqlResource().matches("integration/reference/[A-Za-z0-9_-]+\\.sql")) throw invalid();
-        try (var stream = new ClassPathResource(task.sqlResource()).getInputStream()) {
-            String sql = new String(stream.readAllBytes(), StandardCharsets.UTF_8).trim();
-            if (sql.contains("${") || sql.isEmpty()) throw internal();
-            if (sql.endsWith(";")) sql = sql.substring(0, sql.length() - 1);
-            return sql;
-        } catch (IOException e) { throw internal(); }
+        String sql = task.sqlText();
+        if (sql == null || sql.isBlank() || sql.length() > 60_000) throw invalid();
+        String normalized = sql.replaceAll("(?s)/\\*.*?\\*/|--[^\\r\\n]*", " ").trim();
+        if (normalized.contains("${") || normalized.contains(";") || !normalized.matches("(?is)^(SELECT|WITH\\b).*")
+                || normalized.matches("(?is).*\\b(UPDATE|INSERT|DELETE|MERGE|REPLACE|CALL|EXEC|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\\b.*")) {
+            throw invalid();
+        }
+        return normalized;
     }
 
     private Map<String, JsonNode> fields(JsonNode set, boolean required) {

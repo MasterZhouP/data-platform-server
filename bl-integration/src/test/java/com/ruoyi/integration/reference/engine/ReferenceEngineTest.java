@@ -7,7 +7,6 @@ import com.ruoyi.integration.reference.model.ReferenceException;
 import com.ruoyi.integration.reference.model.ReferenceTask;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,10 +16,7 @@ import java.lang.reflect.Proxy;
 import java.lang.reflect.InvocationTargetException;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
 import java.util.UUID;
-import java.util.ArrayList;
-import java.util.List;
-import java.nio.file.Path;
-import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReferenceEngineTest {
@@ -28,19 +24,12 @@ class ReferenceEngineTest {
     ReferenceEngine engine;
     ReferenceTask task;
     JdbcDataSource ds;
-    final List<Path> sqlFixtures = new ArrayList<>();
-
-    @AfterEach void removeGeneratedSqlFixtures() throws Exception { for (Path path : sqlFixtures) Files.deleteIfExists(path); }
-
     ReferenceTask fixture(String sql, String fieldDefinitions) throws Exception {
-        String filename = "test-"+UUID.randomUUID()+".sql";
-        Path path = Path.of(getClass().getProtectionDomain().getCodeSource().getLocation().toURI()).resolve("integration/reference/"+filename);
-        Files.createDirectories(path.getParent()); Files.writeString(path,sql); sqlFixtures.add(path);
         ObjectNode metadata=task.metadata().deepCopy();
         ObjectNode set=(ObjectNode)metadata.path("resultSets").get(0);
         set.set("fields",mapper.readTree(fieldDefinitions));
         ((ObjectNode)set.path("defaults")).putArray("sort");
-        return new ReferenceTask("GENERIC", "通用参照", true,task.datasourceKey(),"integration/reference/"+filename,metadata);
+        return new ReferenceTask("GENERIC", "通用参照", true,task.datasourceKey(),sql,metadata);
     }
 
     @BeforeEach void setup() throws Exception {
@@ -57,7 +46,7 @@ class ReferenceEngineTest {
             s.execute("INSERT INTO CurrentStock VALUES ('0001',1,2),('0001',1,3),('0002',1,10),('0003',1,5)");
         }
         ObjectNode metadata = (ObjectNode) mapper.readTree(getClass().getResourceAsStream("/integration/reference/u8-material-metadata.json"));
-        task = new ReferenceTask("U8_MATERIAL_REFERENCE", "物料参照", true, "u8-test", "integration/reference/material.sql", metadata);
+        task = new ReferenceTask("U8_MATERIAL_REFERENCE", "物料参照", true, "u8-test", materialSql(), metadata);
         // H2 has no COUNT_BIG aggregate. Translate that one dialect spelling at the JDBC boundary;
         // all joins, filters, bound values, sorting, paging, and returned rows run on real JDBC.
         engine = new ReferenceEngine(key -> new DelegatingDataSource(ds) {
@@ -90,6 +79,23 @@ class ReferenceEngineTest {
         assertTrue(rows.get(0).path("zldj").isNull());
         assertEquals("D001", rows.get(0).path("mrscbm").asText());
         rows.forEach(row -> row.forEach(value -> assertTrue(value.isTextual() || value.isNull())));
+    }
+
+    @Test void executesPersistedSqlTextRatherThanClasspathSqlResource() throws Exception {
+        ObjectNode metadata = task.metadata().deepCopy();
+        ObjectNode set = (ObjectNode) metadata.path("resultSets").get(0);
+        set.set("fields", mapper.readTree("""
+                [{"name":"cInvCode","label":"编码","order":1,"dataType":"STRING","nullable":false,
+                  "filterOperators":["eq"],"sortable":true}]
+                """));
+        ObjectNode defaults = (ObjectNode) set.path("defaults");
+        defaults.set("displayFields", mapper.readTree("[\"cInvCode\"]"));
+        defaults.set("filterFields", mapper.readTree("[\"cInvCode\"]"));
+        defaults.set("sort", mapper.readTree("[{\"field\":\"cInvCode\",\"direction\":\"ASC\"}]"));
+        ReferenceTask persisted = new ReferenceTask("PUBLISHED", "已发布参照", true, "u8-test",
+                "SELECT 'published' AS cInvCode", metadata);
+
+        assertEquals("published", engine.query(persisted, request()).path("rows").get(0).path("cInvCode").asText());
     }
 
     @Test void literalWildcardsAndQuotesCannotExpandUserFilter() throws Exception {
@@ -208,8 +214,8 @@ class ReferenceEngineTest {
         assertEquals("SORT_NOT_ALLOWED",assertThrows(ReferenceException.class,()->engine.validate(task,r)).code());
     }
 
-    @Test void rejectsPathsOutsideTrustedClasspathAndNeverReturnsJdbcSecrets() {
-        ReferenceTask bad = new ReferenceTask(task.taskCode(),task.taskName(),true,task.datasourceKey(),"file:///secret.sql",task.metadata());
+    @Test void rejectsWriteSqlTextAndNeverReturnsJdbcSecrets() {
+        ReferenceTask bad = new ReferenceTask(task.taskCode(),task.taskName(),true,task.datasourceKey(),"SELECT 1; DELETE FROM Inventory",task.metadata());
         assertEquals("INVALID_ARGUMENT",assertThrows(ReferenceException.class,()->engine.validate(bad,request())).code());
         engine = new ReferenceEngine(key -> new DelegatingDataSource(ds) {
             @Override public Connection getConnection() throws java.sql.SQLException {
@@ -220,6 +226,12 @@ class ReferenceEngineTest {
         assertEquals("DATASOURCE_UNAVAILABLE",error.code());
         assertFalse(error.getMessage().contains("secret"));
         assertNull(error.getCause());
+    }
+
+    private String materialSql() throws Exception {
+        try (var stream = getClass().getResourceAsStream("/integration/reference/material.sql")) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     @Test @Timeout(13) void totalBudgetIncludesConnectionAcquisitionAndCancelsWaitingWork() {

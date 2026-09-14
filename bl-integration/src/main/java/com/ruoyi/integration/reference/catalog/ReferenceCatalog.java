@@ -62,11 +62,11 @@ public class ReferenceCatalog {
         metadata.put("metadataVersion", UUID.randomUUID().toString());
         metadata.put("taskCode", input.taskCode());
         metadata.put("taskName", input.taskName());
-        return new ReferenceTask(input.taskCode(), input.taskName(), input.enabled(), input.datasourceKey(), input.sqlResource(), metadata);
+        return new ReferenceTask(input.taskCode(), input.taskName(), input.enabled(), input.datasourceKey(), input.sqlText(), metadata);
     }
 
     private ReferenceTaskRow encode(ReferenceTask task) {
-        return new ReferenceTaskRow(task.taskCode(), task.taskName(), task.enabled(), task.datasourceKey(), task.sqlResource(),
+        return new ReferenceTaskRow(task.taskCode(), task.taskName(), task.enabled(), task.datasourceKey(), task.sqlText(),
             task.metadata().toString(), task.metadata().path("metadataVersion").asText());
     }
 
@@ -76,7 +76,7 @@ public class ReferenceCatalog {
             if (!row.metadataVersion().equals(metadata.path("metadataVersion").asText())) {
                 throw new IllegalStateException("Persisted metadata version mismatch");
             }
-            return new ReferenceTask(row.taskCode(), row.taskName(), row.enabled(), row.datasourceKey(), row.sqlResource(), metadata);
+            return new ReferenceTask(row.taskCode(), row.taskName(), row.enabled(), row.datasourceKey(), row.sqlText(), metadata);
         } catch (Exception ex) {
             throw new ReferenceException("SERVICE_UNAVAILABLE", 503, "参照配置无法读取，请联系管理员", false);
         }

@@ -19,7 +19,7 @@ class ReferenceQueryServiceTest {
     private final ExecutionRepository repository = mock(ExecutionRepository.class);
     private final ReferenceEngine engine = mock(ReferenceEngine.class);
     private final ReferenceQueryService service = new ReferenceQueryService(engine, repository, json);
-    private final ReferenceTask task = new ReferenceTask("DEMO", "示例", true, "u8", "integration/reference/material.sql", json.createObjectNode());
+    private final ReferenceTask task = new ReferenceTask("DEMO", "示例", true, "u8", "SELECT 'DEMO' AS code", json.createObjectNode());
 
     private void assignIds() {
         AtomicLong ids = new AtomicLong(100);

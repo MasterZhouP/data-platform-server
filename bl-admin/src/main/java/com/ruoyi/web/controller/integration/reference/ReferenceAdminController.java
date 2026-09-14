@@ -12,7 +12,6 @@ import com.ruoyi.integration.reference.engine.ReferenceEngine;
 import com.ruoyi.integration.reference.model.ReferenceTask;
 import com.ruoyi.integration.reference.service.ReferenceQueryService;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,16 +29,11 @@ public class ReferenceAdminController
         this.catalog = catalog; this.engine = engine; this.queries = queries; this.u8Enabled = u8Enabled;
     }
     @GetMapping("/options") @PreAuthorize("@ss.hasPermi('integration:reference:list')")
-    public AjaxResult options() throws java.io.IOException
+    public AjaxResult options()
     {
-        var resources = new PathMatchingResourcePatternResolver().getResources("classpath*:integration/reference/*.sql");
-        var sqlResources = java.util.Arrays.stream(resources).map(resource -> {
-            String file = resource.getFilename();
-            return Map.of("path", "integration/reference/" + file,
-                    "label", "material.sql".equals(file) ? "物料参照" : file.replace(".sql", ""));
-        }).distinct().sorted(java.util.Comparator.comparing(resource -> resource.get("path"))).toList();
+        // 参照 SQL 由任务版本保存并在页面手工编辑；这里不再暴露类路径 SQL 资源选择器。
         return AjaxResult.success(Map.of("datasources", List.of(Map.of("key", "u8", "label", "U8 SQL Server", "enabled", u8Enabled)),
-                "sqlResources", sqlResources));
+                "sqlEditor", Map.of("enabled", true, "readOnlyOnly", true)));
     }
     @GetMapping("/tasks") @PreAuthorize("@ss.hasPermi('integration:reference:list')")
     public AjaxResult list() { return AjaxResult.success(catalog.list()); }

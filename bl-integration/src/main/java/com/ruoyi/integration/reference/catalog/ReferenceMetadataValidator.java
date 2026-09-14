@@ -4,7 +4,6 @@ import java.util.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ruoyi.integration.reference.model.ReferenceException;
 import com.ruoyi.integration.reference.model.ReferenceTask;
-import org.springframework.core.io.ClassPathResource;
 
 /** Validates configurable contracts without assuming a particular business result schema. */
 final class ReferenceMetadataValidator {
@@ -16,8 +15,7 @@ final class ReferenceMetadataValidator {
         require(task.taskCode() != null && task.taskCode().matches("[A-Za-z][A-Za-z0-9_]{0,99}"), "任务编码格式错误");
         require(task.taskName() != null && !task.taskName().isBlank() && task.taskName().length() <= 100, "任务名称不能为空或过长");
         require(task.datasourceKey() != null && task.datasourceKey().matches("[A-Za-z][A-Za-z0-9_-]{0,99}"), "数据源配置键错误");
-        require(task.sqlResource() != null && task.sqlResource().matches("integration/reference/[A-Za-z0-9_-]+\\.sql")
-            && new ClassPathResource(task.sqlResource()).exists(), "必须选择已部署的受控 SQL 资源");
+        validateReadOnlySql(task.sqlText());
         JsonNode metadata = task.metadata();
         object(metadata, Set.of("taskCode", "taskName", "taskType", "executionMode", "metadataVersion", "resultSets"));
         require(task.taskCode().equals(text(metadata, "taskCode", 100)), "元数据任务编码不一致");
@@ -122,6 +120,16 @@ final class ReferenceMetadataValidator {
         return value.intValue();
     }
     private static void bool(JsonNode node, String key) { require(node.path(key).isBoolean(), "配置必须为布尔值：" + key); }
+    /**
+     * 参照 SQL 改由已发布配置保存，不能再通过资源路径间接选择代码包内脚本。
+     * 这里维持同步参照的单条只读查询边界，不接受任意多语句或写库指令。
+     */
+    private static void validateReadOnlySql(String value) {
+        require(value != null && !value.isBlank() && value.length() <= 60000, "参照 SQL 不能为空或过长");
+        String sql = value.replaceAll("(?s)/\\*.*?\\*/|--[^\\r\\n]*", " ").trim();
+        require(!sql.contains("${") && !sql.contains(";") && sql.matches("(?is)^(SELECT|WITH\\b).*"), "参照 SQL 必须是一条只读查询");
+        require(!sql.matches("(?is).*\\b(UPDATE|INSERT|DELETE|MERGE|REPLACE|CALL|EXEC|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\\b.*"), "参照 SQL 不能包含写库或管理指令");
+    }
     private static void require(boolean condition, String message) {
         if (!condition) throw new ReferenceException("INVALID_ARGUMENT", 400, message, false);
     }

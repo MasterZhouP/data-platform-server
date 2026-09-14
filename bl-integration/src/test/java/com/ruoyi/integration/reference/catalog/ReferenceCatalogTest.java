@@ -22,7 +22,7 @@ class ReferenceCatalogTest {
              "parameters":[],"defaults":{"displayFields":["code"],"filterFields":["code"],"sort":[{"field":"code","direction":"ASC"}],"pageSize":20},
              "limits":{"maxPageSize":200,"maxFilterConditions":20,"maxFilterDepth":3,"maxSortFields":5,"maxInValues":100,"queryTimeoutMs":10000}}]}
             """);
-        return new ReferenceTask("DEMO", "示例", false, "u8", "integration/reference/material.sql", metadata);
+        return new ReferenceTask("DEMO", "示例", false, "u8", "SELECT 'DEMO' AS code", metadata);
     }
 
     @Test void createsGenericTaskWithServerGeneratedVersionAndPersistsMetadata() throws Exception {
@@ -33,18 +33,18 @@ class ReferenceCatalogTest {
         verify(mapper).insert(argThat(row -> row.taskCode().equals("DEMO") && row.metadataJson().contains("code")));
     }
 
-    @Test void rejectsInvalidDefaultsAndUntrustedSqlBeforeWriting() throws Exception {
+    @Test void rejectsInvalidDefaultsAndWriteSqlBeforeWriting() throws Exception {
         var task = task();
         ((ObjectNode) task.metadata().withArray("resultSets").get(0).path("defaults")).withArray("displayFields").add("unknown");
         assertThrows(ReferenceException.class, () -> catalog.create(task));
         var original = task();
-        assertThrows(ReferenceException.class, () -> catalog.create(new ReferenceTask("DEMO", "示例", false, "u8", "../secret.sql", original.metadata())));
+        assertThrows(ReferenceException.class, () -> catalog.create(new ReferenceTask("DEMO", "示例", false, "u8", "SELECT 1; DELETE FROM x", original.metadata())));
         verify(mapper, never()).insert(any());
     }
 
     @Test void optimisticUpdateRejectsConcurrentSaveAndTaskCodeMismatch() throws Exception {
         var task = task();
-        when(mapper.find("DEMO")).thenReturn(new ReferenceTaskRow("DEMO", "示例", false, "u8", task.sqlResource(), task.metadata().toString(), "old"));
+        when(mapper.find("DEMO")).thenReturn(new ReferenceTaskRow("DEMO", "示例", false, "u8", task.sqlText(), task.metadata().toString(), "old"));
         when(mapper.update(any(), eq("old"))).thenReturn(0);
         var error = assertThrows(ReferenceException.class, () -> catalog.save("DEMO", task));
         assertEquals("METADATA_VERSION_MISMATCH", error.code());
@@ -54,7 +54,7 @@ class ReferenceCatalogTest {
     @Test void getRejectsCaseInsensitiveDatabaseMatch() throws Exception {
         var task = task();
         when(mapper.find("demo")).thenReturn(new ReferenceTaskRow("DEMO", "示例", true, "u8",
-                task.sqlResource(), task.metadata().toString(), "old"));
+                task.sqlText(), task.metadata().toString(), "old"));
 
         var error = assertThrows(ReferenceException.class, () -> catalog.get("demo"));
 
@@ -65,7 +65,7 @@ class ReferenceCatalogTest {
     @Test void acceptsCompleteSqlColumnLabelsIncludingChineseAndClosingBracket() throws Exception {
         var original = task();
         var metadata = (ObjectNode) json.readTree(original.metadata().toString().replace("\"code\"", "\"库存]编码\""));
-        var task = new ReferenceTask(original.taskCode(), original.taskName(), false, "u8", original.sqlResource(), metadata);
+        var task = new ReferenceTask(original.taskCode(), original.taskName(), false, "u8", original.sqlText(), metadata);
         assertEquals("库存]编码", catalog.create(task).metadata().path("resultSets").get(0).path("fields").get(0).path("name").asText());
         var fields = ((ObjectNode) metadata.path("resultSets").get(0)).withArray("fields");
         fields.add(fields.get(0).deepCopy());
