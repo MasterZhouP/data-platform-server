@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskMapper">
+    <resultMap id="Task" type="com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskRow">
+        <constructor>
+            <idArg column="task_code" javaType="java.lang.String" />
+            <arg column="task_name" javaType="java.lang.String" />
+            <arg column="task_type" javaType="java.lang.String" />
+            <arg column="enabled" javaType="_boolean" />
+            <arg column="active_revision_id" javaType="java.lang.Long" />
+            <arg column="draft_revision_id" javaType="java.lang.Long" />
+            <arg column="config_version" javaType="java.lang.Long" />
+        </constructor>
+    </resultMap>
+
+    <resultMap id="Revision" type="com.ruoyi.integration.taskdefinition.mapper.TaskRevisionRow">
+        <constructor>
+            <idArg column="revision_id" javaType="java.lang.Long" />
+            <arg column="task_code" javaType="java.lang.String" />
+            <arg column="revision_no" javaType="_int" />
+            <arg column="status" javaType="java.lang.String" />
+            <arg column="config_json" javaType="java.lang.String" />
+            <arg column="config_checksum" javaType="java.lang.String" />
+            <arg column="dependency_revisions_json" javaType="java.lang.String" />
+        </constructor>
+    </resultMap>
+
+    <select id="findTask" resultMap="Task">
+        SELECT task_code, task_name, task_type, enabled, active_revision_id, draft_revision_id, config_version
+        FROM int_integration_task
+        WHERE task_code = #{taskCode}
+    </select>
+
+    <select id="findRevision" resultMap="Revision">
+        SELECT revision_id, task_code, revision_no, status, config_json, config_checksum, dependency_revisions_json
+        FROM int_integration_task_revision
+        WHERE revision_id = #{revisionId}
+    </select>
+
+    <insert id="insertTask">
+        INSERT INTO int_integration_task (
+            task_code, task_name, task_type, enabled, active_revision_id, draft_revision_id, config_version,
+            create_time, update_time
+        ) VALUES (
+            #{taskCode}, #{taskName}, #{taskType}, #{enabled}, #{activeRevisionId}, #{draftRevisionId}, #{configVersion},
+            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <insert id="insertRevision">
+        INSERT INTO int_integration_task_revision (
+            revision_id, task_code, revision_no, status, config_json, config_checksum, dependency_revisions_json,
+            create_time, update_time
+        ) VALUES (
+            #{revisionId}, #{taskCode}, #{revisionNo}, #{status}, #{configJson}, #{checksum}, #{dependencyRevisionsJson},
+            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        )
+    </insert>
+</mapper>

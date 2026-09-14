@@ -22,6 +22,7 @@
 - U8 timeout or unconfirmed outcome becomes `RESULT_UNKNOWN` and is never blindly replayed. Confirmed U8 success followed by required result-query failure becomes `PARTIAL_SUCCESS` and resumes only result processing.
 - Acceptance pins task revision/checksum and dependency snapshots so publishing a new draft never changes an accepted execution.
 - Preserve existing U8-to-OA sales-outbound behavior and synchronous reference-query behavior during migration.
+- For every new or modified business-chain class, add concise Chinese comments at business boundaries: request acceptance, revision pinning, SQL preparation, U8 send/result classification, post-processing checkpoint and safe retry. Comments must explain the business reason and state transition, not restate Java syntax line by line.
 - Do not modify or reset user-owned changes outside the files explicitly listed in each task.
 
 ---
