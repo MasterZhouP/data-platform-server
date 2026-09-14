@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.integration.datasource.admin.DatasourceReadService;
 import com.ruoyi.integration.reference.catalog.ReferenceCatalog;
 import com.ruoyi.integration.reference.engine.ReferenceEngine;
 import com.ruoyi.integration.reference.model.ReferenceTask;
@@ -23,11 +24,11 @@ public class ReferenceAdminController
     private final ReferenceCatalog catalog;
     private final ReferenceEngine engine;
     private final ReferenceQueryService queries;
-    private final boolean u8Enabled;
+    private final DatasourceReadService datasources;
     public ReferenceAdminController(ReferenceCatalog catalog, ReferenceEngine engine, ReferenceQueryService queries,
-            @Value("${integration.datasource.u8.enabled:false}") boolean u8Enabled)
+            DatasourceReadService datasources)
     {
-        this.catalog = catalog; this.engine = engine; this.queries = queries; this.u8Enabled = u8Enabled;
+        this.catalog = catalog; this.engine = engine; this.queries = queries; this.datasources = datasources;
     }
     @GetMapping("/options") @PreAuthorize("@ss.hasPermi('integration:reference:list')")
     public AjaxResult options() throws java.io.IOException
@@ -38,7 +39,11 @@ public class ReferenceAdminController
             return Map.of("path", "integration/reference/" + file,
                     "label", "material.sql".equals(file) ? "物料参照" : file.replace(".sql", ""));
         }).distinct().sorted(java.util.Comparator.comparing(resource -> resource.get("path"))).toList();
-        return AjaxResult.success(Map.of("datasources", List.of(Map.of("key", "u8", "label", "U8 SQL Server", "enabled", u8Enabled)),
+        var managedSources = datasources.list().stream().map(source -> Map.of(
+                "key", source.path("datasourceKey").asText(),
+                "label", source.path("name").asText(source.path("datasourceKey").asText()),
+                "enabled", source.path("enabled").asBoolean())).toList();
+        return AjaxResult.success(Map.of("datasources", managedSources,
                 "sqlResources", sqlResources));
     }
     @GetMapping("/tasks") @PreAuthorize("@ss.hasPermi('integration:reference:list')")
