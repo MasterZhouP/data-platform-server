@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ruoyi.integration.configuration.ConfigurationException;
 import com.ruoyi.integration.datasource.validation.ReadonlyPermissionVerifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Performs a bounded, read-only connectivity and permission probe without exposing JDBC details. */
@@ -16,6 +17,7 @@ public class DatasourceProbe {
     private final ObjectMapper json;
     private final ReadonlyPermissionVerifier readonly;
 
+    @Autowired
     public DatasourceProbe(ObjectMapper json) {
         this(json, new ReadonlyPermissionVerifier());
     }
