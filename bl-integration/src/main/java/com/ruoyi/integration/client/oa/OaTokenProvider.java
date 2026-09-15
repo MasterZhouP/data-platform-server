@@ -3,19 +3,26 @@ package com.ruoyi.integration.client.oa;
 import java.util.Map;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public class OaTokenProvider
 {
     private final OaHttpTransport transport;
-    private final OaRestProperties properties;
+    private final OaRestSettings settings;
     private volatile String cachedToken;
 
+    @Autowired
     public OaTokenProvider(OaHttpTransport transport, OaRestProperties properties)
     {
+        this(transport, properties.snapshot());
+    }
+
+    public OaTokenProvider(OaHttpTransport transport, OaRestSettings settings)
+    {
         this.transport = transport;
-        this.properties = properties;
+        this.settings = settings;
     }
 
     public String getToken()
@@ -43,13 +50,15 @@ public class OaTokenProvider
         }
     }
 
+    public synchronized void clear() { cachedToken = null; }
+
     private String authenticate()
     {
         requireCredentials();
         String body = JSON.toJSONString(Map.of(
-                "userName", properties.getUsername(),
-                "password", properties.getPassword(),
-                "loginName", properties.getLoginName()));
+                "userName", settings.restUsername(),
+                "password", settings.password(),
+                "loginName", settings.loginName()));
         OaHttpResponse response;
         try
         {
@@ -79,7 +88,7 @@ public class OaTokenProvider
 
     private void requireCredentials()
     {
-        if (blank(properties.getUsername()) || blank(properties.getPassword()) || blank(properties.getLoginName()))
+        if (blank(settings.restUsername()) || blank(settings.password()) || blank(settings.loginName()))
         {
             throw OaClientException.nonRetryable("OA_AUTH_NOT_CONFIGURED", "OA REST账号配置不完整");
         }

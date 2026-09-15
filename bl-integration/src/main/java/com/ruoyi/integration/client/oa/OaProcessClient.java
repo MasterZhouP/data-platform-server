@@ -3,6 +3,7 @@ package com.ruoyi.integration.client.oa;
 import java.util.Map;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -10,13 +11,19 @@ public class OaProcessClient implements OaProcessOperations
 {
     private final OaHttpTransport transport;
     private final OaTokenProvider tokens;
-    private final OaRestProperties properties;
+    private final OaRestSettings settings;
 
+    @Autowired
     public OaProcessClient(OaHttpTransport transport, OaTokenProvider tokens, OaRestProperties properties)
+    {
+        this(transport, tokens, properties.snapshot());
+    }
+
+    public OaProcessClient(OaHttpTransport transport, OaTokenProvider tokens, OaRestSettings settings)
     {
         this.transport = transport;
         this.tokens = tokens;
-        this.properties = properties;
+        this.settings = settings;
     }
 
     @Override
@@ -79,7 +86,7 @@ public class OaProcessClient implements OaProcessOperations
         String body = JSON.toJSONString(Map.of(
                 "summaryId", process.summaryId(),
                 "affairId", process.affairId(),
-                "member", properties.getLoginName()));
+                "member", settings.loginName()));
         OaHttpResponse response = authorizedPost("/seeyon/rest/affair/cancel", body, "OA_CANCEL_TIMEOUT");
         ensureHttpSuccess(response, "OA_CANCEL_FAILED", "OA_CANCEL_RESULT_UNKNOWN");
         CancelConfirmation confirmation = cancelConfirmation(response.body());

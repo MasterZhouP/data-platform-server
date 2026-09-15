@@ -1,17 +1,16 @@
 package com.ruoyi.web.controller.integration.reference;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.integration.datasource.admin.DatasourceReadService;
 import com.ruoyi.integration.reference.catalog.ReferenceCatalog;
 import com.ruoyi.integration.reference.engine.ReferenceEngine;
 import com.ruoyi.integration.reference.model.ReferenceTask;
 import com.ruoyi.integration.reference.service.ReferenceQueryService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,17 +21,21 @@ public class ReferenceAdminController
     private final ReferenceCatalog catalog;
     private final ReferenceEngine engine;
     private final ReferenceQueryService queries;
-    private final boolean u8Enabled;
+    private final DatasourceReadService datasources;
     public ReferenceAdminController(ReferenceCatalog catalog, ReferenceEngine engine, ReferenceQueryService queries,
-            @Value("${integration.datasource.u8.enabled:false}") boolean u8Enabled)
+            DatasourceReadService datasources)
     {
-        this.catalog = catalog; this.engine = engine; this.queries = queries; this.u8Enabled = u8Enabled;
+        this.catalog = catalog; this.engine = engine; this.queries = queries; this.datasources = datasources;
     }
     @GetMapping("/options") @PreAuthorize("@ss.hasPermi('integration:reference:list')")
     public AjaxResult options()
     {
-        // 参照 SQL 由任务版本保存并在页面手工编辑；这里不再暴露类路径 SQL 资源选择器。
-        return AjaxResult.success(Map.of("datasources", List.of(Map.of("key", "u8", "label", "U8 SQL Server", "enabled", u8Enabled)),
+        // 参照 SQL 继续由任务版本保存；数据源列表则来自统一配置中心，不再依赖 YAML 固定开关。
+        var managedSources = datasources.list().stream().map(source -> Map.of(
+                "key", source.path("datasourceKey").asText(),
+                "label", source.path("name").asText(source.path("datasourceKey").asText()),
+                "enabled", source.path("enabled").asBoolean())).toList();
+        return AjaxResult.success(Map.of("datasources", managedSources,
                 "sqlEditor", Map.of("enabled", true, "readOnlyOnly", true)));
     }
     @GetMapping("/tasks") @PreAuthorize("@ss.hasPermi('integration:reference:list')")
