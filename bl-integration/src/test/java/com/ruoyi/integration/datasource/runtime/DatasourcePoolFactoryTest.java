@@ -1,6 +1,5 @@
 package com.ruoyi.integration.datasource.runtime;
 
-import java.util.Set;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.integration.configuration.RevisionToken;
 import com.ruoyi.integration.datasource.validation.DatasourcePolicy;
@@ -22,7 +21,7 @@ class DatasourcePoolFactoryTest {
         config.put("username", "readonly");
         config.put("maximumPoolSize", 2);
         config.put("connectionTimeoutMs", 2345);
-        var factory = new DatasourcePoolFactory(new DatasourcePolicy(Set.of("u8.internal")));
+        var factory = new DatasourcePoolFactory(new DatasourcePolicy());
 
         PreparedDatasource prepared = factory.create("u8", new RevisionToken("revision-1"), config, "test-only-password".toCharArray());
         HikariDataSource source = (HikariDataSource) prepared.dataSource();

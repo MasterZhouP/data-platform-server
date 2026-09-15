@@ -1,6 +1,5 @@
 package com.ruoyi.integration.datasource.admin;
 
-import java.util.Set;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.integration.configuration.RevisionToken;
 import com.ruoyi.integration.datasource.catalog.DatasourceCatalog;
@@ -27,7 +26,7 @@ class DatasourceAdminServiceTest {
         when(secrets.store(eq("u8"), any(), any())).thenReturn("secret-9");
         when(catalog.saveDraft(eq("u8"), eq(null), any(), eq("secret-9"), any())).thenAnswer(invocation -> invocation.getArgument(4));
         DatasourceAdminService service = new DatasourceAdminService(catalog, secrets,
-                new DatasourcePolicy(Set.of("u8.internal")), json);
+                new DatasourcePolicy(), json);
         var request = json.createObjectNode();
         request.put("name", "U8 生产库");
         request.put("host", "u8.internal");
@@ -52,7 +51,7 @@ class DatasourceAdminServiceTest {
         when(secrets.rebind(eq("u8"), eq(new RevisionToken("revision-2")), eq("secret-2"), any())).thenReturn("secret-3");
         when(catalog.saveDraft(eq("u8"), eq("revision-2"), any(), eq("secret-3"), any())).thenAnswer(invocation -> invocation.getArgument(4));
         DatasourceAdminService service = new DatasourceAdminService(catalog, secrets,
-                new DatasourcePolicy(Set.of("u8.internal")), json);
+                new DatasourcePolicy(), json);
         var request = json.createObjectNode();
         request.put("host", "u8.internal");
         request.put("port", 1433);

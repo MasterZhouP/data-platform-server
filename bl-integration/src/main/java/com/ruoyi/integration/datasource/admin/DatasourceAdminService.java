@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class DatasourceAdminService {
     private static final Set<String> REQUEST_FIELDS = Set.of("name", "environment", "host", "port", "databaseName", "username",
-            "connectionOptions", "allowedObjects", "maximumPoolSize", "connectionTimeoutMs", "passwordUpdate", "expectedRevision", "operationId");
+            "connectionOptions", "maximumPoolSize", "connectionTimeoutMs", "passwordUpdate", "expectedRevision", "operationId");
     private final DatasourceCatalog catalog;
     private final DatasourceSecretStore secrets;
     private final DatasourcePolicy policy;
@@ -37,7 +37,7 @@ public class DatasourceAdminService {
             if (!REQUEST_FIELDS.contains(field)) throw new ConfigurationException("INVALID_ARGUMENT", 400, "存在不支持的配置字段");
         });
         ObjectNode config = json.createObjectNode().put("type", "SQLSERVER");
-        copy(request, config, "name", "environment", "host", "port", "databaseName", "username", "connectionOptions", "allowedObjects",
+        copy(request, config, "name", "environment", "host", "port", "databaseName", "username", "connectionOptions",
                 "maximumPoolSize", "connectionTimeoutMs");
         RevisionToken candidate = new RevisionToken(UUID.randomUUID().toString());
         String passwordUpdate = request.path("passwordUpdate").asText("");

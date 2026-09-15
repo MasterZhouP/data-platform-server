@@ -1,8 +1,6 @@
 package com.ruoyi.integration.datasource.runtime;
 
 import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.Set;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ruoyi.integration.configuration.ConfigurationException;
 import com.ruoyi.integration.configuration.RevisionToken;
@@ -33,7 +31,7 @@ public class DatasourceRuntimeService {
     public ObjectNode testDraft(String key, String expectedRevisionId) {
         PreparedDatasource prepared = prepareDraft(key, expectedRevisionId);
         try {
-            ObjectNode result = probe.test(prepared, allowedObjects(catalog.getDraft(key)));
+            ObjectNode result = probe.test(prepared);
             catalog.recordTest(key, new RevisionToken(prepared.revisionId()), result);
             return result;
         } finally {
@@ -43,7 +41,7 @@ public class DatasourceRuntimeService {
 
     public ObjectNode activate(String key, String expectedRevisionId, String expectedActiveRevisionId) {
         PreparedDatasource prepared = prepareDraft(key, expectedRevisionId);
-        ObjectNode result = probe.test(prepared, allowedObjects(catalog.getDraft(key)));
+        ObjectNode result = probe.test(prepared);
         catalog.recordTest(key, new RevisionToken(prepared.revisionId()), result);
         if (!"SUCCESS".equals(result.path("status").asText())) {
             close(prepared);
@@ -76,14 +74,6 @@ public class DatasourceRuntimeService {
         } finally {
             Arrays.fill(password, '\0');
         }
-    }
-
-    private static Set<String> allowedObjects(ObjectNode config) {
-        Set<String> values = new LinkedHashSet<>();
-        config.path("allowedObjects").forEach(node -> {
-            if (node.isTextual()) values.add(node.asText());
-        });
-        return Set.copyOf(values);
     }
 
     private static void close(PreparedDatasource prepared) {

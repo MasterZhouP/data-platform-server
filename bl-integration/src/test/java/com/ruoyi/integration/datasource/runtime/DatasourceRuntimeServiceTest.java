@@ -39,14 +39,14 @@ class DatasourceRuntimeServiceTest {
         when(catalog.getDraft("u8")).thenReturn(config);
         when(secrets.read("u8", new RevisionToken("draft-1"), "secret-1")).thenReturn("secret".toCharArray());
         when(pools.create(eq("u8"), any(), eq(config), any())).thenReturn(new PreparedDatasource("u8", "draft-1", source));
-        when(probe.test(any(PreparedDatasource.class), any())).thenReturn(inspected);
+        when(probe.test(any(PreparedDatasource.class))).thenReturn(inspected);
 
         ObjectNode result = new DatasourceRuntimeService(catalog, secrets, pools, probe, activation)
                 .testDraft("u8", "draft-1");
 
         assertEquals("SUCCESS", result.path("status").asText());
         assertTrue(source.closed);
-        verify(probe).test(any(PreparedDatasource.class), any());
+        verify(probe).test(any(PreparedDatasource.class));
     }
 
     private static final class TrackingDataSource implements DataSource, AutoCloseable {

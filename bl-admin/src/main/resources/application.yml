@@ -145,6 +145,14 @@ xss:
 
 # 集成执行与外部数据源。外部连接默认关闭，凭据只从环境变量注入。
 integration:
+  configuration:
+      oa-rest:
+          allowed-hosts:
+            - 221.215.114.30
+      encryption:
+        active-key-id: local-v1
+        keys:
+          local-v1: guCtYUnok6OAS11h/odqdICH25PcCUWWoewq6mnaco0=
   oa:
     base-url: ${INTEGRATION_OA_BASE_URL:http://221.215.114.30:8081}
     username: ${INTEGRATION_OA_REST_USERNAME:rest}
