@@ -18,7 +18,6 @@ import org.springframework.stereotype.Component;
 public class ReferenceTaskConfigValidator
 {
     private static final Set<String> CONFIG_FIELDS = Set.of("datasourceKey", "sqlText", "metadata");
-    private static final Set<String> READABLE_DATASOURCES = Set.of("u8");
 
     public ReferenceTask parseAndValidate(String taskCode, String taskName, boolean enabled, JsonNode config)
     {
@@ -38,11 +37,8 @@ public class ReferenceTaskConfigValidator
         {
             throw new IllegalArgumentException("参照任务必须填写数据源、SQL 和字段元数据");
         }
-        if (!READABLE_DATASOURCES.contains(config.path("datasourceKey").asText()))
-        {
-            // 参照运行时只登记了 U8 只读数据源，配置不能借名称尝试访问任意连接。
-            throw new IllegalArgumentException("参照任务只能使用已登记的 U8 只读数据源");
-        }
+        // datasourceKey 只是对受管数据源的引用，不能绑定为历史名称 "u8"。
+        // 键名格式由下方元数据校验确认；是否存在、已启用以及连接版本由运行时注册表负责。
         // 深拷贝元数据，避免校验或控制面版本写入时意外修改调用方正在编辑的对象。
         ObjectNode metadata = ((ObjectNode) config.path("metadata")).deepCopy();
         ReferenceTask task = new ReferenceTask(taskCode, taskName, enabled, config.path("datasourceKey").asText(),
