@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,6 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class TaskConfigValidator
 {
     private static final Pattern CODE = Pattern.compile("[A-Za-z][A-Za-z0-9_]{0,49}");
+    private static final Pattern MANAGED_DATASOURCE_KEY = Pattern.compile("[a-z][a-z0-9_-]{0,99}");
+    private static final Pattern MANAGED_OPERATION_CODE = Pattern.compile("[A-Z][A-Z0-9_]{0,49}");
     // SQL Server 的 SELECT ... INTO 可写出新表，必须与其他写语句一起在配置保存前拦截。
     private static final Pattern WRITE_SQL = Pattern.compile("(?is)\\b(UPDATE|INSERT|DELETE|MERGE|REPLACE|CALL|EXEC|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|INTO)\\b");
     private static final Pattern COMMENTS = Pattern.compile("(?s)/\\*.*?\\*/|--[^\\r\\n]*");
@@ -26,14 +29,34 @@ public class TaskConfigValidator
             "parameterBindings", "required", "initialDelayMs", "intervalMs", "maxAttempts", "outputMappings");
 
     private final ObjectMapper json;
-    private final Set<String> readableDatasourceKeys;
-    private final Set<String> allowedOperations;
+    private final Predicate<String> readableDatasource;
+    private final Predicate<String> allowedOperation;
 
     public TaskConfigValidator(ObjectMapper json, Set<String> readableDatasourceKeys, Set<String> allowedOperations)
     {
+        this(json, readableDatasourceKeys::contains, allowedOperations::contains);
+    }
+
+    /**
+     * Managed datasource keys are resolved at execution time by the shared registry, rather than captured from
+     * the YAML beans that happened to exist when the application started.
+     */
+    public TaskConfigValidator(ObjectMapper json, Set<String> allowedOperations)
+    {
+        this(json, MANAGED_DATASOURCE_KEY.asMatchPredicate(), allowedOperations::contains);
+    }
+
+    /** Runtime configuration uses the managed U8 registry; its active operation set is checked by the gateway. */
+    public TaskConfigValidator(ObjectMapper json)
+    {
+        this(json, MANAGED_DATASOURCE_KEY.asMatchPredicate(), MANAGED_OPERATION_CODE.asMatchPredicate());
+    }
+
+    private TaskConfigValidator(ObjectMapper json, Predicate<String> readableDatasource, Predicate<String> allowedOperation)
+    {
         this.json = json;
-        this.readableDatasourceKeys = Set.copyOf(readableDatasourceKeys);
-        this.allowedOperations = Set.copyOf(allowedOperations);
+        this.readableDatasource = readableDatasource;
+        this.allowedOperation = allowedOperation;
     }
 
     public OaToU8TaskConfig parseAndValidate(JsonNode source)
@@ -96,12 +119,16 @@ public class TaskConfigValidator
         objectWithOnly(source, Set.of("operationCode", "path", "requestJsonTemplate", "successRule", "errorMessagePointer", "outputs"),
                 "INVALID_U8_REQUEST");
         String operationCode = code(source.path("operationCode"), "INVALID_U8_REQUEST");
-        if (!allowedOperations.contains(operationCode))
+        if (!allowedOperation.test(operationCode))
         {
             throw error("U8_OPERATION_NOT_ALLOWED", "U8业务接口未注册");
         }
-        String path = text(source.path("path"), 1, 2000, "INVALID_U8_REQUEST");
-        if (!path.startsWith("/") || path.startsWith("//") || path.contains("?") || path.contains("://"))
+        String path = null;
+        if (source.has("path") && !source.path("path").isNull())
+        {
+            path = text(source.path("path"), 1, 2000, "INVALID_U8_REQUEST");
+        }
+        if (path != null && (!path.startsWith("/") || path.startsWith("//") || path.contains("?") || path.contains("://")))
         {
             throw error("U8_PATH_INVALID", "U8接口只能使用受控相对路径");
         }
@@ -299,8 +326,8 @@ public class TaskConfigValidator
 
     private String datasource(JsonNode node)
     {
-        String key = code(node, "DATASOURCE_NOT_ALLOWED");
-        if (!readableDatasourceKeys.contains(key))
+        String key = text(node, 1, 100, "DATASOURCE_NOT_ALLOWED");
+        if (!MANAGED_DATASOURCE_KEY.matcher(key).matches() || !readableDatasource.test(key))
         {
             throw error("DATASOURCE_NOT_ALLOWED", "数据源未注册或不是只读数据源");
         }

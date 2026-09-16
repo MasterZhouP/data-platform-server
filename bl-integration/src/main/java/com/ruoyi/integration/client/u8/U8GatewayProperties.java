@@ -5,15 +5,13 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
- * U8 公共连接配置，只从部署环境读取。
+ * U8 网关运行时设置值对象。生产实例由受管账户修订创建；保留该类型供传输层和迁移兼容测试使用。
  * <p>
  * 任务版本仅能引用业务操作和相对路径，不能保存主机、账户、appKey 或 token；从而确保所有 OA→U8 任务使用同一套账户。
  * </p>
  */
-@Component
 @ConfigurationProperties(prefix = "integration.u8")
 public class U8GatewayProperties
 {
@@ -29,6 +27,7 @@ public class U8GatewayProperties
     private int readTimeoutMillis = 15000;
     private Map<String, String> accountParameters = new LinkedHashMap<>();
     private Set<String> allowedOperationCodes = new LinkedHashSet<>();
+    private Map<String, String> operationPaths = new LinkedHashMap<>();
 
     public boolean isConfigured()
     {
@@ -64,5 +63,10 @@ public class U8GatewayProperties
     public void setAllowedOperationCodes(Set<String> allowedOperationCodes)
     {
         this.allowedOperationCodes = allowedOperationCodes == null ? new LinkedHashSet<>() : new LinkedHashSet<>(allowedOperationCodes);
+    }
+    public Map<String, String> getOperationPaths() { return Map.copyOf(operationPaths); }
+    public void setOperationPaths(Map<String, String> operationPaths)
+    {
+        this.operationPaths = operationPaths == null ? new LinkedHashMap<>() : new LinkedHashMap<>(operationPaths);
     }
 }

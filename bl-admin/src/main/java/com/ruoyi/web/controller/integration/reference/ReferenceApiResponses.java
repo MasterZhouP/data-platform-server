@@ -3,6 +3,7 @@ package com.ruoyi.web.controller.integration.reference;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import jakarta.servlet.http.HttpServletRequest;
 
 public final class ReferenceApiResponses
@@ -29,6 +30,14 @@ public final class ReferenceApiResponses
 
     public static String requestId(HttpServletRequest request)
     {
-        return (String) request.getAttribute(REQUEST_ID);
+        Object existing = request.getAttribute(REQUEST_ID);
+        if (existing instanceof String id && !id.isBlank())
+        {
+            return id;
+        }
+        String supplied = request.getHeader("X-Request-Id");
+        String id = supplied == null || supplied.isBlank() ? UUID.randomUUID().toString() : supplied;
+        request.setAttribute(REQUEST_ID, id);
+        return id;
     }
 }

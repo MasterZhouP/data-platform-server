@@ -14,6 +14,9 @@ import com.ruoyi.integration.taskdefinition.TaskRevision;
 import com.ruoyi.integration.taskdefinition.TaskType;
 import com.ruoyi.integration.taskdefinition.management.TaskDraftCommand;
 import com.ruoyi.integration.taskdefinition.management.TaskManagementService;
+import com.ruoyi.integration.u8tooa.U8ToOaPreview;
+import com.ruoyi.integration.u8tooa.U8ToOaPreviewService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,11 +36,20 @@ public class IntegrationTaskAdminController
 {
     private final TaskManagementService tasks;
     private final OaToU8PreviewService preview;
+    private final U8ToOaPreviewService u8ToOaPreview;
 
     public IntegrationTaskAdminController(TaskManagementService tasks, OaToU8PreviewService preview)
     {
+        this(tasks, preview, null);
+    }
+
+    @Autowired
+    public IntegrationTaskAdminController(TaskManagementService tasks, OaToU8PreviewService preview,
+            U8ToOaPreviewService u8ToOaPreview)
+    {
         this.tasks = tasks;
         this.preview = preview;
+        this.u8ToOaPreview = u8ToOaPreview;
     }
 
     @GetMapping
@@ -70,6 +82,18 @@ public class IntegrationTaskAdminController
         return AjaxResult.success(created);
     }
 
+    @PostMapping("/{taskCode}/copy")
+    @PreAuthorize("@ss.hasPermi('integration:task:edit')")
+    @Log(title = "复制集成任务", businessType = BusinessType.INSERT)
+    public AjaxResult copy(@PathVariable String taskCode, @RequestBody TaskCopyRequest request)
+    {
+        String sourceCode = taskCode(taskCode);
+        String targetCode = taskCode(request.taskCode());
+        IntegrationTaskDefinition copied = tasks.copy(sourceCode, targetCode,
+                requiredText(request.taskName(), "taskName", 100), optionalText(request.changeNote(), "changeNote", 500));
+        return AjaxResult.success(copied);
+    }
+
     @PutMapping("/{taskCode}/draft")
     @PreAuthorize("@ss.hasPermi('integration:task:edit')")
     @Log(title = "保存集成任务草稿", businessType = BusinessType.UPDATE)
@@ -94,9 +118,20 @@ public class IntegrationTaskAdminController
     @PreAuthorize("@ss.hasPermi('integration:task:preview')")
     public AjaxResult preview(@PathVariable String taskCode, @RequestBody TaskPreviewRequest request)
     {
-        OaToU8Preview result = preview.preview(tasks.draftConfig(taskCode, requiredVersion(request.configVersion())),
-                new OaToU8PreviewInput(requiredText(request.masterId(), "masterId", 200),
-                        optionalText(request.formId(), "formId", 200), optionalText(request.summaryId(), "summaryId", 200)));
+        Long version = requiredVersion(request.configVersion());
+        IntegrationTaskDefinition task = tasks.detail(taskCode);
+        OaToU8PreviewInput trigger = new OaToU8PreviewInput(requiredText(request.masterId(), "masterId", 200),
+                optionalText(request.formId(), "formId", 200), optionalText(request.summaryId(), "summaryId", 200));
+        if (task.taskType() == TaskType.U8_TO_OA)
+        {
+            if (u8ToOaPreview == null)
+            {
+                throw new IllegalStateException("U8到OA预览服务尚未初始化");
+            }
+            U8ToOaPreview result = u8ToOaPreview.preview(tasks.draftConfig(taskCode, version), trigger);
+            return AjaxResult.success(Map.of("data", result.data(), "request", result.request()));
+        }
+        OaToU8Preview result = preview.preview(tasks.draftConfig(taskCode, version), trigger);
         return AjaxResult.success(Map.of("data", result.data(), "request", result.request()));
     }
 

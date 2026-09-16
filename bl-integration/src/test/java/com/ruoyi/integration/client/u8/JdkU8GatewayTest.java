@@ -92,6 +92,30 @@ class JdkU8GatewayTest
         assertTrue(transport.requests.isEmpty());
     }
 
+    @Test
+    void resolvesTheOperationPathFromTheManagedRegistrationWhenTaskOmitsIt() throws Exception
+    {
+        gatewayProperties().setOperationPaths(Map.of("VOUCHER_ADD", "/api/voucher/add"));
+        transport.respond(200, "{\"token\":{\"id\":\"token-1\"}}");
+        transport.respond(200, "{\"trade\":{\"id\":\"trade-1\"}}");
+        transport.respond(200, "{\"code\":0}");
+
+        U8CallResult result = gateway.postBusiness("VOUCHER_ADD", null, json.readTree("{}"));
+
+        assertEquals(U8CallStatus.SUCCESS, result.status());
+        assertEquals("/api/voucher/add", transport.requests.get(2).path());
+    }
+
+    private U8GatewayProperties gatewayProperties()
+    {
+        U8GatewayProperties properties = new U8GatewayProperties();
+        properties.setBaseUrl("https://u8.example.test");
+        properties.setAllowedOperationCodes(Set.of("VOUCHER_ADD"));
+        properties.setAccountParameters(Map.of("from_account", "shared-account", "app_key", "shared-secret"));
+        gateway = new JdkU8Gateway(transport, properties, json, Clock.systemUTC());
+        return properties;
+    }
+
     private static final class FakeTransport implements U8HttpTransport
     {
         private final Queue<Object> responses = new ArrayDeque<>();

@@ -2,6 +2,7 @@ package com.ruoyi.integration.oatou8;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Collections;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ruoyi.integration.oatou8.config.OaToU8TaskConfig;
@@ -66,7 +67,8 @@ public class OaToU8PreviewService
         triggerValues.put("summaryId", trigger.summaryId());
         Map<String, Object> constants = new LinkedHashMap<>();
         constants.putAll(config.constants());
-        return new ExecutionVariableContext(Map.copyOf(triggerValues), Map.copyOf(constants), Map.copyOf(prepared),
+        // formId/summaryId are optional in the OA protocol; keep their null semantics without Map.copyOf rejecting them.
+        return new ExecutionVariableContext(Collections.unmodifiableMap(new LinkedHashMap<>(triggerValues)), Map.copyOf(constants), Map.copyOf(prepared),
                 Map.of(), Map.of());
     }
 }

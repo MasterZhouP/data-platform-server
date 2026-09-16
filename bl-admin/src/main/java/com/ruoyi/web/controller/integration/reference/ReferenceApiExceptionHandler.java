@@ -2,6 +2,7 @@ package com.ruoyi.web.controller.integration.reference;
 
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.integration.reference.model.ReferenceException;
+import com.ruoyi.integration.taskdefinition.management.TaskDraftNotValidatedException;
 import com.ruoyi.web.controller.integration.openapi.IntegrationOpenApiController;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -43,6 +44,11 @@ public class ReferenceApiExceptionHandler
     {
         return respond(request, 400, "INVALID_ARGUMENT", exception.getMessage(), false, null);
     }
+    @ExceptionHandler(TaskDraftNotValidatedException.class)
+    public ResponseEntity<?> draftNotValidated(TaskDraftNotValidatedException exception, HttpServletRequest request)
+    {
+        return respond(request, 409, "DRAFT_NOT_VALIDATED", exception.getMessage(), false, null);
+    }
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<?> unavailable(DataAccessException exception, HttpServletRequest request)
     {
@@ -60,14 +66,16 @@ public class ReferenceApiExceptionHandler
     public ResponseEntity<?> unexpected(Exception exception, HttpServletRequest request)
     {
         // Full SQL/bind values can occur in JDBC exception text. Do not expose or log that payload here.
-        log.error("参照请求异常 requestId={} type={}", ReferenceApiResponses.requestId(request), exception.getClass().getSimpleName());
-        return respond(request, 500, "INTERNAL_ERROR", "参照服务异常，请根据请求标识联系管理员", false, null);
+        String requestId = ReferenceApiResponses.requestId(request);
+        log.error("参照请求异常 requestId={} type={}", requestId, exception.getClass().getSimpleName());
+        return respond(request, 500, "INTERNAL_ERROR", "参照服务异常，请联系管理员（请求标识：" + requestId + "）", false, null);
     }
     private ResponseEntity<?> respond(HttpServletRequest request, int status, String code,
             String message, boolean retryable, String executionId)
     {
         if (!request.getRequestURI().substring(request.getContextPath().length()).startsWith("/integration/openapi/v1/"))
-            return ResponseEntity.ok(AjaxResult.error(message).put("referenceCode", code).put("httpStatus", status));
+            return ResponseEntity.ok(AjaxResult.error(message).put("referenceCode", code).put("httpStatus", status)
+                    .put("requestId", ReferenceApiResponses.requestId(request)));
         return ResponseEntity.status(status).body(ReferenceApiResponses.error(
                 ReferenceApiResponses.requestId(request), executionId, code, message, retryable));
     }

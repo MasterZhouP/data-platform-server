@@ -8,8 +8,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /**
  * OA→U8 任务共享的唯一业务网关。
@@ -18,7 +16,6 @@ import org.springframework.stereotype.Component;
  * 这样任务配置不再复制认证链路，同时 U8 调用结果不确定时可准确进入人工核验而非重复推单。
  * </p>
  */
-@Component
 public class JdkU8Gateway implements U8Gateway, U8Client
 {
     private final U8HttpTransport transport;
@@ -27,7 +24,6 @@ public class JdkU8Gateway implements U8Gateway, U8Client
     private final Clock clock;
     private volatile CachedToken cachedToken;
 
-    @Autowired
     public JdkU8Gateway(U8HttpTransport transport, U8GatewayProperties properties, ObjectMapper json)
     {
         this(transport, properties, json, Clock.systemUTC());
@@ -52,14 +48,28 @@ public class JdkU8Gateway implements U8Gateway, U8Client
         {
             return failure(U8CallStatus.PRE_SEND_FAILURE, "U8_OPERATION_NOT_ALLOWED", "U8业务操作未注册");
         }
-        if (!validRelativePath(relativePath))
+        String registeredPath = properties.getOperationPaths().get(operationCode);
+        String targetPath = relativePath;
+        if (!properties.getOperationPaths().isEmpty() && registeredPath == null)
+        {
+            return failure(U8CallStatus.PRE_SEND_FAILURE, "U8_OPERATION_NOT_ALLOWED", "U8业务操作未启用");
+        }
+        if (!properties.getOperationPaths().isEmpty() && (targetPath == null || targetPath.isBlank()))
+        {
+            targetPath = registeredPath;
+        }
+        if (!properties.getOperationPaths().isEmpty() && !registeredPath.equals(targetPath))
+        {
+            return failure(U8CallStatus.PRE_SEND_FAILURE, "U8_PATH_NOT_REGISTERED", "U8业务接口路径与操作注册不一致");
+        }
+        if (!validRelativePath(targetPath))
         {
             return failure(U8CallStatus.PRE_SEND_FAILURE, "U8_PATH_INVALID", "U8业务接口必须是受控相对路径");
         }
         try
         {
             String body = json.writeValueAsString(payload);
-            return postWithTokenRefresh(relativePath, body, false);
+            return postWithTokenRefresh(targetPath, body, false);
         }
         catch (JsonProcessingException ex)
         {
@@ -105,6 +115,32 @@ public class JdkU8Gateway implements U8Gateway, U8Client
     {
         return new U8ConnectionHealth(properties.isConfigured(), cachedToken != null && cachedToken.expiresAt().isAfter(clock.instant()),
                 properties.isConfigured() ? "U8公共账户已配置" : "U8公共账户未配置");
+    }
+
+    /** Performs only the public account token request for configuration validation. */
+    public void authenticate()
+    {
+        if (!properties.isConfigured())
+        {
+            throw new U8GatewayException("U8_NOT_CONFIGURED", "U8公共账户尚未配置");
+        }
+        token();
+    }
+
+    /** Validates both public authentication endpoints without sending a business request. */
+    public void authenticateWithTradeId()
+    {
+        if (!properties.isConfigured())
+        {
+            throw new U8GatewayException("U8_NOT_CONFIGURED", "U8公共账户尚未配置");
+        }
+        tradeId(token());
+    }
+
+    /** Clears the in-memory token when a candidate session is retired. */
+    public void close()
+    {
+        cachedToken = null;
     }
 
     private U8CallResult postWithTokenRefresh(String relativePath, String body, boolean refreshed)

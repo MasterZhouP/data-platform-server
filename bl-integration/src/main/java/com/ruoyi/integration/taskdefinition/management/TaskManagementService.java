@@ -12,6 +12,8 @@ import com.ruoyi.integration.oatou8.config.ResultQueryStep;
 import com.ruoyi.integration.oatou8.config.TaskConfigValidator;
 import com.ruoyi.integration.reference.catalog.ReferenceTaskConfigValidator;
 import com.ruoyi.integration.reference.model.ReferenceTask;
+import com.ruoyi.integration.u8tooa.config.U8ToOaTaskConfig;
+import com.ruoyi.integration.u8tooa.config.U8ToOaTaskConfigValidator;
 import com.ruoyi.integration.taskdefinition.IntegrationTaskDefinition;
 import com.ruoyi.integration.taskdefinition.RevisionStatus;
 import com.ruoyi.integration.taskdefinition.TaskDefinitionNotFoundException;
@@ -21,6 +23,8 @@ import com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskMapper;
 import com.ruoyi.integration.taskdefinition.mapper.IntegrationTaskRow;
 import com.ruoyi.integration.taskdefinition.mapper.TaskRevisionRow;
 import com.ruoyi.integration.taskdefinition.mapper.TaskRevisionWriteRow;
+import com.ruoyi.integration.sync.schedule.IntegrationTaskScheduler;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,21 +40,40 @@ public class TaskManagementService
     private final ObjectMapper json;
     private final TaskConfigValidator oaToU8Validator;
     private final ReferenceTaskConfigValidator referenceValidator;
+    private final U8ToOaTaskConfigValidator u8ToOaValidator;
+    private final IntegrationTaskScheduler scheduler;
 
     public TaskManagementService(IntegrationTaskMapper mapper, ObjectMapper json,
             TaskConfigValidator oaToU8Validator)
     {
-        this(mapper, json, oaToU8Validator, new ReferenceTaskConfigValidator());
+        this(mapper, json, oaToU8Validator, new ReferenceTaskConfigValidator(),
+                new U8ToOaTaskConfigValidator(json), null);
+    }
+
+    public TaskManagementService(IntegrationTaskMapper mapper, ObjectMapper json,
+            TaskConfigValidator oaToU8Validator, ReferenceTaskConfigValidator referenceValidator)
+    {
+        this(mapper, json, oaToU8Validator, referenceValidator, new U8ToOaTaskConfigValidator(json));
+    }
+
+    public TaskManagementService(IntegrationTaskMapper mapper, ObjectMapper json,
+            TaskConfigValidator oaToU8Validator, ReferenceTaskConfigValidator referenceValidator,
+            U8ToOaTaskConfigValidator u8ToOaValidator)
+    {
+        this(mapper, json, oaToU8Validator, referenceValidator, u8ToOaValidator, null);
     }
 
     @Autowired
     public TaskManagementService(IntegrationTaskMapper mapper, ObjectMapper json,
-            TaskConfigValidator oaToU8Validator, ReferenceTaskConfigValidator referenceValidator)
+            TaskConfigValidator oaToU8Validator, ReferenceTaskConfigValidator referenceValidator,
+            U8ToOaTaskConfigValidator u8ToOaValidator, ObjectProvider<IntegrationTaskScheduler> scheduler)
     {
         this.mapper = mapper;
         this.json = json;
         this.oaToU8Validator = oaToU8Validator;
         this.referenceValidator = referenceValidator;
+        this.u8ToOaValidator = u8ToOaValidator;
+        this.scheduler = scheduler == null ? null : scheduler.getIfAvailable();
     }
 
     @Transactional
@@ -72,6 +95,36 @@ public class TaskManagementService
         }
         return new IntegrationTaskDefinition(taskCode, command.taskName(), command.taskType(), command.enabled(),
                 null, draft.getRevisionId(), 1L);
+    }
+
+    /** Copies a task's current draft, or its published revision when no draft exists, into a disabled new draft. */
+    @Transactional
+    public IntegrationTaskDefinition copy(String sourceTaskCode, String targetTaskCode,
+            String targetName, String changeNote)
+    {
+        validateTaskCode(targetTaskCode);
+        if (sourceTaskCode == null || sourceTaskCode.isBlank() || sourceTaskCode.trim().equals(targetTaskCode))
+        {
+            throw new IllegalArgumentException("复制目标编码不能与来源任务相同");
+        }
+        IntegrationTaskRow source = requiredTask(sourceTaskCode.trim());
+        if (TaskType.REFERENCE_QUERY.name().equals(source.taskType()))
+        {
+            throw new IllegalArgumentException("参照任务请在参照配置页中复制");
+        }
+        Long revisionId = source.draftRevisionId() != null ? source.draftRevisionId() : source.activeRevisionId();
+        if (revisionId == null)
+        {
+            throw new IllegalArgumentException("来源任务没有可复制的配置版本");
+        }
+        TaskRevisionRow revision = requiredRevision(revisionId);
+        String name = targetName == null ? null : targetName.trim();
+        if (name == null || name.isBlank() || name.length() > 100)
+        {
+            throw new IllegalArgumentException("复制任务名称不能为空且不能超过100个字符");
+        }
+        return create(targetTaskCode, new TaskDraftCommand(name, TaskType.valueOf(source.taskType()), false,
+                null, readConfig(revision), changeNote));
     }
 
     @Transactional
@@ -134,7 +187,8 @@ public class TaskManagementService
     {
         IntegrationTaskRow task = requiredTask(taskCode);
         requireExpectedVersion(taskCode, task, expectedVersion);
-        if (task.draftRevisionId() == null || requiredRevision(task.draftRevisionId()).status() != RevisionStatus.VALIDATED.name())
+        if (task.draftRevisionId() == null || !RevisionStatus.VALIDATED.name().equals(
+                requiredRevision(task.draftRevisionId()).status()))
         {
             throw new TaskDraftNotValidatedException(taskCode);
         }
@@ -147,6 +201,11 @@ public class TaskManagementService
                 || mapper.publishTask(taskCode, task.draftRevisionId(), task.configVersion()) != 1)
         {
             throw new TaskVersionConflictException(taskCode);
+        }
+        if (scheduler != null && TaskType.U8_TO_OA.name().equals(task.taskType()))
+        {
+            U8ToOaTaskConfig config = u8ToOaValidator.parseAndValidate(readConfig(requiredRevision(task.draftRevisionId())));
+            scheduler.synchronize(taskCode, task.taskName(), task.enabled(), config.sync().cronExpression());
         }
         return new IntegrationTaskDefinition(taskCode, task.taskName(), TaskType.valueOf(task.taskType()), task.enabled(),
                 task.draftRevisionId(), null, task.configVersion() + 1);
@@ -213,6 +272,11 @@ public class TaskManagementService
                     command.config());
             return prepared(command.config(), dependencies(config));
         }
+        if (command.taskType() == TaskType.U8_TO_OA)
+        {
+            U8ToOaTaskConfig config = u8ToOaValidator.parseAndValidate(command.config());
+            return prepared(command.config(), dependencies(config));
+        }
         throw new IllegalArgumentException("暂不支持页面配置 " + command.taskType() + " 类型任务");
     }
 
@@ -243,8 +307,8 @@ public class TaskManagementService
         config.resultQueries().forEach(step -> sources.add(step.datasourceKey()));
         Map<String, String> result = new LinkedHashMap<>();
         sources.forEach(source -> result.put("datasource:" + source, "registered-readonly"));
-        // 任务只引用共享网关标识；账户、token、tradeId 和连接密钥均不进入版本数据。
-        result.put("u8Gateway", "shared");
+        // 任务只引用唯一受管网关键；账户、token、tradeId 和连接密钥均不进入版本数据。
+        result.put("u8Gateway", "u8-default");
         return Map.copyOf(result);
     }
 
@@ -252,6 +316,17 @@ public class TaskManagementService
     {
         // 参照链路只依赖已登记的只读数据源，不借用 U8 网关、token 或任何写库权限。
         return Map.of("datasource:" + config.datasourceKey(), "registered-readonly");
+    }
+
+    private Map<String, String> dependencies(U8ToOaTaskConfig config)
+    {
+        LinkedHashSet<String> sources = new LinkedHashSet<>();
+        config.dataSteps().forEach(step -> sources.add(step.datasourceKey()));
+        sources.add(config.sync().datasourceKey());
+        Map<String, String> result = new LinkedHashMap<>();
+        sources.forEach(source -> result.put("datasource:" + source, "registered-readonly"));
+        result.put("oaGateway", "oa-default");
+        return Map.copyOf(result);
     }
 
     private String validationJson(PreparedDraft prepared)
@@ -288,6 +363,14 @@ public class TaskManagementService
             throw new TaskDefinitionNotFoundException(taskCode);
         }
         return row;
+    }
+
+    private void validateTaskCode(String taskCode)
+    {
+        if (taskCode == null || !taskCode.matches("[A-Z][A-Z0-9_]{0,99}"))
+        {
+            throw new IllegalArgumentException("任务编码只能使用大写字母、数字和下划线，且必须以字母开头");
+        }
     }
 
     private TaskRevisionRow requiredRevision(Long revisionId)

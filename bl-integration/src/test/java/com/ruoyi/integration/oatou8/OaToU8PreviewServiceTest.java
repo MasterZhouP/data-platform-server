@@ -41,6 +41,22 @@ class OaToU8PreviewServiceTest
         assertEquals("M-1", result.request().path("masterId").asText());
     }
 
+    @Test
+    void preservesOptionalEmptyOaContextFieldsDuringPreview() throws Exception
+    {
+        ReadOnlySqlExecutor sql = mock(ReadOnlySqlExecutor.class);
+        ObjectNode header = json.createObjectNode().put("code", "V-100");
+        org.mockito.Mockito.when(sql.execute(eq("oa"), org.mockito.ArgumentMatchers.contains("select"),
+                eq(ResultCardinality.ONE), anyMap())).thenReturn(new ReadOnlySqlResult(ResultCardinality.ONE, header));
+        OaToU8PreviewService service = new OaToU8PreviewService(
+                new TaskConfigValidator(json, Set.of("oa"), Set.of("VOUCHER_ADD")), sql,
+                new SqlVariableResolver(), new JsonTemplateRenderer(json), json);
+
+        OaToU8Preview result = service.preview(config(), new OaToU8PreviewInput("M-1", null, null));
+
+        assertEquals("M-1", result.request().path("masterId").asText());
+    }
+
     private ObjectNode config()
     {
         ObjectNode root = json.createObjectNode();

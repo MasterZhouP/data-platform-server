@@ -89,6 +89,29 @@ class TaskConfigValidatorTest
         assertEquals("VOUCHER_ADD", parsed.u8().operationCode());
     }
 
+    @Test
+    void acceptsManagedDatasourceKeysWithoutCapturingTheStartupYamlSources()
+    {
+        ObjectNode config = baseConfig();
+        ((ObjectNode) config.withArray("dataSteps").get(0)).put("datasourceKey", "oa-test");
+        TaskConfigValidator managed = new TaskConfigValidator(json, Set.of("VOUCHER_ADD"));
+
+        OaToU8TaskConfig parsed = managed.parseAndValidate(config);
+
+        assertEquals("oa-test", parsed.dataSteps().get(0).datasourceKey());
+    }
+
+    @Test
+    void allowsNewTaskDefinitionsToOmitTheOperationPath()
+    {
+        ObjectNode config = baseConfig();
+        ((ObjectNode) config.path("u8")).remove("path");
+
+        OaToU8TaskConfig parsed = validator.parseAndValidate(config);
+
+        org.junit.jupiter.api.Assertions.assertNull(parsed.u8().path());
+    }
+
     private void assertError(ObjectNode config, String expectedCode)
     {
         TaskConfigException error = assertThrows(TaskConfigException.class, () -> validator.parseAndValidate(config));

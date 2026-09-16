@@ -77,7 +77,7 @@ class IntegrationTaskMapperTest
             draft.setStatus("DRAFT");
             draft.setConfigJson("{\"u8\":{}}");
             draft.setChecksum("b".repeat(64));
-            draft.setDependencyRevisionsJson("{\"u8Gateway\":\"shared\"}");
+            draft.setDependencyRevisionsJson("{\"u8Gateway\":\"u8-default\"}");
             mapper.insertGeneratedRevision(draft);
             assertTrue(draft.getRevisionId() > 7L);
             assertEquals(1, mapper.updateTaskDraft("OA_EXPENSE_VOUCHER", "费用报销推凭证", true,

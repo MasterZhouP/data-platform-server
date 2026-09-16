@@ -12,13 +12,11 @@ import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
-import org.springframework.stereotype.Component;
 
 /**
  * JDK HTTP 实现只负责把已组装的网关请求送至固定 U8 主机。
  * 网络超时和连接中断会保留“请求可能已到达”的事实，供上层阻止盲目重推。
  */
-@Component
 public class JdkU8HttpTransport implements U8HttpTransport
 {
     private final U8GatewayProperties properties;

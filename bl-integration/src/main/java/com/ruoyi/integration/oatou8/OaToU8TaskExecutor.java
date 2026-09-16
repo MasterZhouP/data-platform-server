@@ -15,6 +15,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ruoyi.integration.client.u8.U8CallResult;
 import com.ruoyi.integration.client.u8.U8CallStatus;
 import com.ruoyi.integration.client.u8.U8Gateway;
+import com.ruoyi.integration.client.u8.runtime.U8GatewayLease;
+import com.ruoyi.integration.client.u8.runtime.U8GatewayRegistry;
+import com.ruoyi.integration.configuration.ConfigurationException;
 import com.ruoyi.integration.execution.domain.IntegrationExecution;
 import com.ruoyi.integration.execution.repository.ExecutionRepository;
 import com.ruoyi.integration.execution.service.ResolvedExecution;
@@ -56,6 +59,7 @@ public class OaToU8TaskExecutor implements TaskExecutor
     private final SqlVariableResolver sqlVariables;
     private final JsonTemplateRenderer templateRenderer;
     private final U8Gateway gateway;
+    private final U8GatewayRegistry gatewayRegistry;
     private final JsonResponseEvaluator responseEvaluator;
     private final ExecutionRepository repository;
     private final ObjectMapper json;
@@ -64,11 +68,27 @@ public class OaToU8TaskExecutor implements TaskExecutor
             SqlVariableResolver sqlVariables, JsonTemplateRenderer templateRenderer, U8Gateway gateway,
             JsonResponseEvaluator responseEvaluator, ExecutionRepository repository, ObjectMapper json)
     {
+        this(configParser, sql, sqlVariables, templateRenderer, gateway, null, responseEvaluator, repository, json);
+    }
+
+    public OaToU8TaskExecutor(Function<JsonNode, OaToU8TaskConfig> configParser, ReadOnlySqlExecutor sql,
+            SqlVariableResolver sqlVariables, JsonTemplateRenderer templateRenderer, U8GatewayRegistry gatewayRegistry,
+            JsonResponseEvaluator responseEvaluator, ExecutionRepository repository, ObjectMapper json)
+    {
+        this(configParser, sql, sqlVariables, templateRenderer, null, gatewayRegistry, responseEvaluator, repository, json);
+    }
+
+    private OaToU8TaskExecutor(Function<JsonNode, OaToU8TaskConfig> configParser, ReadOnlySqlExecutor sql,
+            SqlVariableResolver sqlVariables, JsonTemplateRenderer templateRenderer, U8Gateway gateway,
+            U8GatewayRegistry gatewayRegistry, JsonResponseEvaluator responseEvaluator,
+            ExecutionRepository repository, ObjectMapper json)
+    {
         this.configParser = configParser;
         this.sql = sql;
         this.sqlVariables = sqlVariables;
         this.templateRenderer = templateRenderer;
         this.gateway = gateway;
+        this.gatewayRegistry = gatewayRegistry;
         this.responseEvaluator = responseEvaluator;
         this.repository = repository;
         this.json = json;
@@ -163,7 +183,30 @@ public class OaToU8TaskExecutor implements TaskExecutor
     private U8CallResult callU8(OaToU8TaskConfig config, JsonNode request, ExecutionStageRecorder recorder)
     {
         recorder.started("U8_REQUEST_SENDING", write(request));
-        U8CallResult response = gateway.postBusiness(config.u8().operationCode(), config.u8().path(), request);
+        U8CallResult response;
+        try
+        {
+            if (gatewayRegistry != null)
+            {
+                try (U8GatewayLease lease = gatewayRegistry.acquire("u8-default"))
+                {
+                    response = lease.gateway().postBusiness(config.u8().operationCode(), config.u8().path(), request);
+                }
+            }
+            else if (gateway != null)
+            {
+                response = gateway.postBusiness(config.u8().operationCode(), config.u8().path(), request);
+            }
+            else
+            {
+                throw new ConfigurationException("U8_GATEWAY_UNAVAILABLE", 503, "U8公共账户尚未启用");
+            }
+        }
+        catch (ConfigurationException unavailable)
+        {
+            recorder.failed("U8_REQUEST_SENDING", unavailable.code(), unavailable.getMessage());
+            throw PushFailureException.retryable(unavailable.code(), unavailable.getMessage());
+        }
         if (response.status() == U8CallStatus.SUCCESS)
         {
             recorder.succeeded("U8_REQUEST_SENDING", response.responsePayload());

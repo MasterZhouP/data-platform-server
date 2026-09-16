@@ -47,7 +47,8 @@ class TaskManagementServiceTest
     void publishesOnlyTheValidatedDraftAndArchivesThePreviousRevision()
     {
         when(mapper.findTask("OA_EXPENSE_VOUCHER")).thenReturn(task(5L, 21L));
-        when(mapper.findRevision(21L)).thenReturn(revision(21L, "VALIDATED"));
+        // JDBC/MyBatis returns a distinct String instance, so publication must compare status by value.
+        when(mapper.findRevision(21L)).thenReturn(revision(21L, new String("VALIDATED")));
         when(mapper.archiveRevision(5L)).thenReturn(1);
         when(mapper.publishRevision(21L)).thenReturn(1);
         when(mapper.publishTask(eq("OA_EXPENSE_VOUCHER"), eq(21L), eq(5L))).thenReturn(1);
@@ -165,6 +166,6 @@ class TaskManagementServiceTest
     private TaskRevisionRow revision(Long revisionId, String status)
     {
         return new TaskRevisionRow(revisionId, "OA_EXPENSE_VOUCHER", 2, status, config().toString(),
-                "a".repeat(64), "{\"u8Gateway\":\"shared\"}");
+                "a".repeat(64), "{\"u8Gateway\":\"u8-default\"}");
     }
 }

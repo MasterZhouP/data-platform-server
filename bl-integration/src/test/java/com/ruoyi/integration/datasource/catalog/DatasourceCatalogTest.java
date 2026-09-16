@@ -64,6 +64,19 @@ class DatasourceCatalogTest {
     }
 
     @Test
+    void readsTheExactActiveRevisionForRuntimeRecovery() {
+        DatasourceMapper mapper = mock(DatasourceMapper.class);
+        DatasourceRow row = new DatasourceRow("oa-test", "OA 测试库", true, "active-2", null, 3L);
+        DatasourceRevision revision = new DatasourceRevision("active-2", "oa-test", "{}", "secret-2", "checksum");
+        when(mapper.findCatalog("oa-test")).thenReturn(row);
+        when(mapper.findRevision("active-2")).thenReturn(revision);
+
+        DatasourceRevision active = new DatasourceCatalog(mapper, json).activeRevision("oa-test");
+
+        assertEquals(revision, active);
+    }
+
+    @Test
     void keepsOnlyTheSafeProbeSummaryOnTheTestedRevision() {
         DatasourceMapper mapper = mock(DatasourceMapper.class);
         DatasourceRevision revision = new DatasourceRevision("draft-1", "u8", "{}", "secret-1", "checksum");

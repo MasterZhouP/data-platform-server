@@ -16,7 +16,7 @@ ruoyi:
 # 开发环境配置
 server:
   # 服务器的HTTP端口，默认为8080
-  port: 8080
+  port: 8081
   servlet:
     # 应用的访问路径
     context-path: /
@@ -153,6 +153,8 @@ integration:
         active-key-id: local-v1
         keys:
           local-v1: guCtYUnok6OAS11h/odqdICH25PcCUWWoewq6mnaco0=
+      u8-gateway:
+        allowed-hosts: api.yonyouup.com
   oa:
     base-url: ${INTEGRATION_OA_BASE_URL:http://221.215.114.30:8081}
     username: ${INTEGRATION_OA_REST_USERNAME:rest}
@@ -192,18 +194,18 @@ integration:
       queue-capacity: 200
   datasource:
     oa:
-      enabled: ${INTEGRATION_OA_DB_ENABLED:false}
-      url: ${INTEGRATION_OA_DB_URL:}
-      username: ${INTEGRATION_OA_DB_USERNAME:}
-      password: ${INTEGRATION_OA_DB_PASSWORD:}
+      enabled: true
+      url: jdbc:sqlserver://ae6qe7258136.vicp.fun:35799;databaseName=A810;encrypt=true;trustServerCertificate=true
+      username: sa
+      password: 123456Abc
       read-only: true
       maximum-pool-size: 3
       connection-timeout: 5000
     u8:
-      enabled: ${INTEGRATION_U8_DB_ENABLED:false}
-      url: ${INTEGRATION_U8_DB_URL:}
-      username: ${INTEGRATION_U8_DB_USERNAME:}
-      password: ${INTEGRATION_U8_DB_PASSWORD:}
+      enabled: true
+      url: jdbc:sqlserver://ae6qe7258136.vicp.fun:35799;databaseName=UFDATA_123_2023;encrypt=true;trustServerCertificate=true
+      username: sa
+      password: 123456Abc
       read-only: true
       maximum-pool-size: 3
       connection-timeout: 5000

@@ -104,6 +104,15 @@ public class DatasourceCatalog {
         return revision;
     }
 
+    /** Internal runtime lookup for rehydrating the exact active pool revision after an application restart. */
+    public DatasourceRevision activeRevision(String key) {
+        DatasourceRow row = requireCatalog(key);
+        if (!hasText(row.activeRevisionId())) {
+            throw new ConfigurationException("CONFIGURATION_NOT_READY", 409, "数据源尚未启用");
+        }
+        return revisionFor(key, row.activeRevisionId());
+    }
+
     @Transactional(rollbackFor = RuntimeException.class)
     public void recordTest(String key, RevisionToken revisionToken, ObjectNode safeResult) {
         if (revisionToken == null || safeResult == null) {
