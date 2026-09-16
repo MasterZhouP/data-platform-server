@@ -3,21 +3,12 @@ package com.ruoyi.integration.client.oa;
 import java.util.Map;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
 public class OaTokenProvider
 {
     private final OaHttpTransport transport;
     private final OaRestSettings settings;
     private volatile String cachedToken;
-
-    @Autowired
-    public OaTokenProvider(OaHttpTransport transport, OaRestProperties properties)
-    {
-        this(transport, properties.snapshot());
-    }
 
     public OaTokenProvider(OaHttpTransport transport, OaRestSettings settings)
     {

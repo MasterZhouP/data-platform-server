@@ -10,20 +10,11 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
 public class JdkOaHttpTransport implements OaHttpTransport
 {
     private final OaRestSettings settings;
     private final HttpClient client;
-
-    @Autowired
-    public JdkOaHttpTransport(OaRestProperties properties)
-    {
-        this(properties.snapshot());
-    }
 
     public JdkOaHttpTransport(OaRestSettings settings)
     {

@@ -307,7 +307,7 @@ public class TaskManagementService
         config.resultQueries().forEach(step -> sources.add(step.datasourceKey()));
         Map<String, String> result = new LinkedHashMap<>();
         sources.forEach(source -> result.put("datasource:" + source, "registered-readonly"));
-        // 任务只引用唯一受管网关键；账户、token、tradeId 和连接密钥均不进入版本数据。
+        // 任务只引用受管 OA 网关逻辑标识；账户、token、tradeId 和连接密钥均不进入版本数据。
         result.put("u8Gateway", "u8-default");
         return Map.copyOf(result);
     }
@@ -325,7 +325,7 @@ public class TaskManagementService
         sources.add(config.sync().datasourceKey());
         Map<String, String> result = new LinkedHashMap<>();
         sources.forEach(source -> result.put("datasource:" + source, "registered-readonly"));
-        result.put("oaGateway", "oa-default");
+        result.put("oaGateway", "managed-active");
         return Map.copyOf(result);
     }
 

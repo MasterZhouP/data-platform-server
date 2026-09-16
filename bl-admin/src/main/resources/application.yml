@@ -155,13 +155,6 @@ integration:
           local-v1: guCtYUnok6OAS11h/odqdICH25PcCUWWoewq6mnaco0=
       u8-gateway:
         allowed-hosts: api.yonyouup.com
-  oa:
-    base-url: ${INTEGRATION_OA_BASE_URL:http://221.215.114.30:8081}
-    username: ${INTEGRATION_OA_REST_USERNAME:rest}
-    password: ${INTEGRATION_OA_REST_PASSWORD:}
-    login-name: ${INTEGRATION_OA_LOGIN_NAME:bladmin}
-    connect-timeout-millis: ${INTEGRATION_OA_CONNECT_TIMEOUT_MS:5000}
-    read-timeout-millis: ${INTEGRATION_OA_READ_TIMEOUT_MS:15000}
   sync:
     sales-outbound:
       template-code: ${INTEGRATION_SALES_OUTBOUND_TEMPLATE:XSCKDCS}

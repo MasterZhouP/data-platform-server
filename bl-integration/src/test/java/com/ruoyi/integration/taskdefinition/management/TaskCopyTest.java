@@ -47,7 +47,9 @@ class TaskCopyTest
         assertEquals(false, result.enabled());
         verify(mapper).insertGeneratedRevision(org.mockito.ArgumentMatchers.argThat((TaskRevisionWriteRow row) ->
                 row.getTaskCode().equals("U8_RECEIPT_COPY") && row.getConfigJson().contains("payloadTemplate")
-                        && row.getDependencyRevisionsJson().contains("oaGateway")));
+                        && row.getDependencyRevisionsJson().contains("oaGateway")
+                        && row.getDependencyRevisionsJson().contains("managed-active")
+                        && !row.getDependencyRevisionsJson().contains("oa-default")));
     }
 
     private TaskManagementService service()

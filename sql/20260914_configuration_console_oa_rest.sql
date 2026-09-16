@@ -1,6 +1,6 @@
 -- Configuration Console D: versioned OA REST account administration.
 -- Apply after backing up the configuration schema. This migration never copies the legacy
--- integration.oa.rest password from YAML; an operator must explicitly save and verify an account.
+-- A password is not imported from application configuration; an operator must explicitly save and verify an account.
 
 CREATE TABLE IF NOT EXISTS int_oa_rest_connection (
     connection_key VARCHAR(100) COLLATE utf8mb4_bin NOT NULL,

@@ -20,14 +20,11 @@ class OaProcessClientTest
     @BeforeEach
     void setUp()
     {
-        OaRestProperties properties = new OaRestProperties();
-        properties.setBaseUrl("http://oa.test:8081");
-        properties.setUsername("rest-user");
-        properties.setPassword("rest-password");
-        properties.setLoginName("bladmin");
+        OaRestSettings settings = new OaRestSettings("http://oa.test:8081", "rest-user", "rest-password",
+                "bladmin", 5000, 15000);
         transport = new ScriptedTransport();
-        OaTokenProvider tokens = new OaTokenProvider(transport, properties);
-        client = new OaProcessClient(transport, tokens, properties);
+        OaTokenProvider tokens = new OaTokenProvider(transport, settings);
+        client = new OaProcessClient(transport, tokens, settings);
     }
 
     @Test
