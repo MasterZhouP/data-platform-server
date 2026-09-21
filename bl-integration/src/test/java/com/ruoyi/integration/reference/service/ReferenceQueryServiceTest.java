@@ -48,6 +48,11 @@ class ReferenceQueryServiceTest {
         var execution = inserted.getAllValues().get(0);
         assertEquals("RUNNING", execution.getStatus());
         assertEquals("REFERENCE_QUERY", execution.getStage());
+        assertEquals("CREATE", execution.getOperation());
+        assertEquals("MANUAL", execution.getTriggerSource());
+        assertFalse(execution.getForce());
+        assertFalse(execution.getU8Confirmed());
+        assertEquals("FULL", execution.getResumeMode());
         assertNull(execution.getMasterId());
         assertTrue(execution.getTriggerPayload().contains("same-request"));
         assertFalse(execution.getTriggerPayload().contains("secret-value"));
@@ -69,13 +74,27 @@ class ReferenceQueryServiceTest {
 
     @Test void loggingDependencyFailureIs503AndDoesNotStartTheQuery() {
         assignIds();
-        doThrow(new DataAccessResourceFailureException("sensitive database detail")).when(repository).insertStage(any());
+        var cause = new DataAccessResourceFailureException("sensitive database detail");
+        doThrow(cause).when(repository).insertStage(any());
         var error = assertThrows(ReferenceException.class, () -> service.query(task, json.createObjectNode(), "request-id"));
         assertEquals("SERVICE_UNAVAILABLE", error.code());
         assertEquals(503, error.httpStatus());
         assertEquals("101", error.executionId());
+        assertSame(cause, error.getCause());
         assertFalse(error.getMessage().contains("sensitive"));
         verify(engine, never()).query(any(), any());
         verify(repository).markFailed(eq(101L), eq("SERVICE_UNAVAILABLE"), anyString(), eq(false), eq(false), any());
+    }
+
+    @Test void executionInsertFailurePreservesCauseWithoutExposingItsMessage() {
+        var cause = new DataAccessResourceFailureException("sensitive database detail");
+        doThrow(cause).when(repository).insert(any());
+        var error = assertThrows(ReferenceException.class,
+                () -> service.query(task, json.createObjectNode(), "request-id"));
+        assertEquals("SERVICE_UNAVAILABLE", error.code());
+        assertEquals(503, error.httpStatus());
+        assertSame(cause, error.getCause());
+        assertFalse(error.getMessage().contains("sensitive"));
+        verify(engine, never()).query(any(), any());
     }
 }

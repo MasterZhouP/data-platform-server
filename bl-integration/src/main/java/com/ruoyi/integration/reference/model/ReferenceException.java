@@ -8,10 +8,16 @@ public class ReferenceException extends RuntimeException {
     private String executionId;
 
     public ReferenceException(String code, int httpStatus, String message) {
-        this(code, httpStatus, message, httpStatus == 503 || httpStatus == 504);
+        this(code, httpStatus, message, httpStatus == 503 || httpStatus == 504, null);
     }
     public ReferenceException(String code, int httpStatus, String message, boolean retryable) {
-        super(message);
+        this(code, httpStatus, message, retryable, null);
+    }
+    public ReferenceException(String code, int httpStatus, String message, Throwable cause) {
+        this(code, httpStatus, message, httpStatus == 503 || httpStatus == 504, cause);
+    }
+    public ReferenceException(String code, int httpStatus, String message, boolean retryable, Throwable cause) {
+        super(message, cause);
         this.code = code;
         this.httpStatus = httpStatus;
         this.retryable = retryable;
